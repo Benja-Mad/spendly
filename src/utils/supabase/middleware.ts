@@ -1,8 +1,8 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
-    let response = NextResponse.next({
+export const updateSession = async (request: NextRequest) => {
+    let supabaseResponse = NextResponse.next({
         request: {
             headers: request.headers,
         },
@@ -18,45 +18,35 @@ export async function middleware(request: NextRequest) {
                 },
                 setAll(cookiesToSet) {
                     cookiesToSet.forEach(({ name, value, options }) => {
-                        response.cookies.set(name, value, options)
+                        request.cookies.set(name, value)
+                        supabaseResponse = NextResponse.next({
+                            request,
+                        })
+                        supabaseResponse.cookies.set(name, value, options)
                     })
                 },
             },
         }
     )
 
-    // Refrescar sesión si es necesario
     const { data: { user } } = await supabase.auth.getUser()
 
-    // Definir rutas públicas (no requieren auth)
-    const isPublicRoute = request.nextUrl.pathname.startsWith('/login') ||
-        request.nextUrl.pathname.startsWith('/register') ||
-        request.nextUrl.pathname.startsWith('/auth/callback')
+    // Rutas públicas (no requieren autenticación)
+    const isPublicRoute = request.nextUrl.pathname.startsWith('/auth/')
 
-    // Si no hay usuario y la ruta no es pública, redirigir a login
+    // Si no hay usuario y la ruta no es pública → redirigir a /auth/signin
     if (!user && !isPublicRoute) {
-        const redirectUrl = new URL('/login', request.url)
-        return NextResponse.redirect(redirectUrl)
+        const url = request.nextUrl.clone()
+        url.pathname = '/auth/signin'
+        return NextResponse.redirect(url)
     }
 
-    // Si hay usuario y está en ruta pública, redirigir a home
+    // Si hay usuario y está en ruta pública → redirigir a inicio
     if (user && isPublicRoute) {
-        const redirectUrl = new URL('/', request.url)
-        return NextResponse.redirect(redirectUrl)
+        const url = request.nextUrl.clone()
+        url.pathname = '/'
+        return NextResponse.redirect(url)
     }
 
-    return response
-}
-
-export const config = {
-    matcher: [
-        /*
-         * Match all request paths except:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico (favicon file)
-         * - public folder
-         */
-        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-    ],
+    return supabaseResponse
 }
