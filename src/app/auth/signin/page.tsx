@@ -24,26 +24,25 @@ export default function SignIn() {
 
     return (
         <div className="flex min-h-screen flex-col md:flex-row">
-            {/* Columna izquierda - Branding */}
+            {/* Columna izquierda - Branding con gradiente */}
             <div className="flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-700 p-8 text-white md:w-1/2 dark:from-blue-800 dark:to-purple-900">
                 <div className="max-w-md text-center md:text-left">
-                    {/* Logo placeholder */}
                     <div className="mb-6 flex justify-center md:justify-start">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-lg">
-                            <span className="text-3xl font-bold">S</span>
+                        <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white/20 backdrop-blur-lg">
+                            <span className="text-4xl font-bold">S</span>
                         </div>
                     </div>
-                    <h1 className="mb-4 text-4xl font-bold">Spendly</h1>
-                    <p className="text-lg opacity-90">
+                    <h1 className="mb-4 text-5xl font-bold">Spendly</h1>
+                    <p className="text-xl opacity-90">
                         Controla tus finanzas de manera simple y eficiente. Lleva el registro de tus tarjetas y gastos en un solo lugar.
                     </p>
                 </div>
             </div>
 
-            {/* Columna derecha - Formulario */}
-            <div className="flex items-center justify-center p-6 md:w-1/2 dark:bg-gray-900">
+            {/* Columna derecha - Formulario centrado */}
+            <div className="flex items-center justify-center bg-gray-50 p-6 md:w-1/2 dark:bg-gray-900">
                 <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800 dark:text-white">
-                    <h2 className="mb-6 text-2xl font-semibold">Iniciar sesión</h2>
+                    <h2 className="mb-6 text-3xl font-semibold">Iniciar sesión</h2>
                     {error && (
                         <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/50 dark:text-red-200">
                             {error}
@@ -75,6 +74,11 @@ export default function SignIn() {
                                 className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                 required
                             />
+                        </div>
+                        <div className="text-right">
+                            <a href="#" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
+                                ¿Olvidaste tu contraseña?
+                            </a>
                         </div>
                         <button
                             type="submit"
