@@ -94,6 +94,11 @@ const mapAlert = (row: RowRecord): Alert => ({
   createdAt: String(row.created_at),
 });
 
+const isEditableMovementType = (
+  type: TransactionType,
+): type is Extract<TransactionType, "income" | "expense"> =>
+  type === "income" || type === "expense";
+
 const getAccount = async (accountId: string) => {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
@@ -206,7 +211,7 @@ const createAlert = async (kind: string, title: string, body: string) => {
 const frequencyDeltaDays = (frequency: RecurringRule["frequency"]) => {
   if (frequency === "weekly") return 7;
   if (frequency === "biweekly") return 14;
-  return 30;
+  throw new Error("Monthly frequency should not be passed to frequencyDeltaDays.");
 };
 
 const incrementRecurringDate = (rule: RecurringRule, fromDate: Date) => {
@@ -217,7 +222,7 @@ const incrementRecurringDate = (rule: RecurringRule, fromDate: Date) => {
   }
 
   const delta = frequencyDeltaDays(rule.frequency);
-  const next = new Date(fromDate);
+  const next = new Date(fromDate.getTime());
   next.setDate(next.getDate() + delta);
   return next;
 };
@@ -366,12 +371,13 @@ export const updateManualTransaction = async (
 
   const existing = mapTransaction(existingData as RowRecord);
 
-  if (existing.origin !== "manual" || !["income", "expense"].includes(existing.type)) {
+  if (existing.origin !== "manual" || !isEditableMovementType(existing.type)) {
     throw new Error("Solo se pueden editar movimientos manuales de ingreso/gasto.");
   }
+  const existingType = existing.type;
 
   const oldAccount = await getAccount(existing.accountId);
-  await reverseMovementFromAccount(oldAccount, existing.type as "income" | "expense", existing.amount);
+  await reverseMovementFromAccount(oldAccount, existingType, existing.amount);
 
   try {
     const nextAccount = await getAccount(payload.accountId);
@@ -394,11 +400,7 @@ export const updateManualTransaction = async (
     }
   } catch (error) {
     const rollbackAccount = await getAccount(existing.accountId);
-    await applyMovementToAccount(
-      rollbackAccount,
-      existing.type as "income" | "expense",
-      existing.amount,
-    );
+    await applyMovementToAccount(rollbackAccount, existingType, existing.amount);
 
     throw error;
   }
@@ -419,19 +421,20 @@ export const deleteManualTransaction = async (transactionId: string) => {
 
   const transaction = mapTransaction(data as RowRecord);
 
-  if (transaction.origin !== "manual" || !["income", "expense"].includes(transaction.type)) {
+  if (transaction.origin !== "manual" || !isEditableMovementType(transaction.type)) {
     throw new Error("Solo se pueden eliminar movimientos manuales de ingreso/gasto.");
   }
+  const transactionType = transaction.type;
 
   const account = await getAccount(transaction.accountId);
-  await reverseMovementFromAccount(account, transaction.type as "income" | "expense", transaction.amount);
+  await reverseMovementFromAccount(account, transactionType, transaction.amount);
 
   const { error: deleteError } = await supabase.from("transactions").delete().eq("id", transaction.id);
 
   if (deleteError) {
     await applyMovementToAccount(
       await getAccount(transaction.accountId),
-      transaction.type as "income" | "expense",
+      transactionType,
       transaction.amount,
     );
 
@@ -528,7 +531,7 @@ export const createSavingsAutoDeposit = async (payload: {
   const dayOfMonth = parsePositiveInteger(payload.dayOfMonth, "Día");
 
   if (dayOfMonth > 28) {
-    throw new Error("El día debe estar entre 1 y 28.");
+    throw new Error("El día debe estar entre 1 y 28 (inclusive).");
   }
 
   const account = await getAccount(payload.accountId);
@@ -537,14 +540,14 @@ export const createSavingsAutoDeposit = async (payload: {
     throw new Error("El depósito automático debe salir de una cuenta disponible, no de crédito.");
   }
 
-  const startMonth = payload.startMonth ?? toIsoDate(addMonths(monthStart(), 1));
+  const startMonthDate = payload.startMonth ?? toIsoDate(addMonths(monthStart(), 1));
 
   const { error } = await supabase.from("savings_auto_deposits").insert({
     fund_id: payload.fundId,
     account_id: payload.accountId,
     amount,
     day_of_month: dayOfMonth,
-    start_month: startMonth,
+    start_month: startMonthDate,
     is_active: true,
   });
 
@@ -706,21 +709,22 @@ export const runRecurringRules = async (runDate: string = toIsoDate(new Date()))
         throw new Error(movementError.message);
       }
 
-      const nextRunDate = incrementRecurringDate(rule, new Date(runDate));
+      const nextScheduledRun = incrementRecurringDate(rule, new Date(runDate));
 
       const { error: updateRuleError } = await supabase
         .from("recurring_rules")
-        .update({ next_run: toIsoDate(nextRunDate) })
+        .update({ next_run: toIsoDate(nextScheduledRun) })
         .eq("id", rule.id);
 
       if (updateRuleError) {
         throw new Error(updateRuleError.message);
       }
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error desconocido";
       await createAlert(
         "recurring_failed",
         "Regla recurrente no ejecutada",
-        `No se pudo ejecutar '${rule.name}' por saldo insuficiente o error de datos.`,
+        `No se pudo ejecutar '${rule.name}': ${message}`,
       );
     }
   }
@@ -751,7 +755,7 @@ const runSavingsAutoDeposits = async (runDate: string) => {
 
     const account = await getAccount(entry.accountId);
 
-    if (account.kind === "credit" || account.balance < entry.amount) {
+    if (account.balance < entry.amount) {
       await createAlert(
         "savings_auto_deposit_failed",
         "Depósito automático no ejecutado",
@@ -783,6 +787,11 @@ const runSavingsAutoDeposits = async (runDate: string) => {
       .eq("id", account.id);
 
     if (accountUpdateError) {
+      await createAlert(
+        "savings_auto_deposit_failed",
+        "Depósito automático no ejecutado",
+        `No se pudo descontar saldo de '${account.name}' para fondo '${fund.name}': ${accountUpdateError.message}`,
+      );
       continue;
     }
 
@@ -792,10 +801,20 @@ const runSavingsAutoDeposits = async (runDate: string) => {
       .eq("id", fund.id);
 
     if (fundUpdateError) {
-      await supabase
+      const { error: rollbackError } = await supabase
         .from("accounts")
         .update({ balance: account.balance })
         .eq("id", account.id);
+
+      const rollbackMessage = rollbackError
+        ? ` Además falló el rollback en cuenta: ${rollbackError.message}.`
+        : "";
+
+      await createAlert(
+        "savings_auto_deposit_failed",
+        "Depósito automático no ejecutado",
+        `No se pudo actualizar fondo '${fund.name}': ${fundUpdateError.message}.${rollbackMessage}`,
+      );
 
       continue;
     }

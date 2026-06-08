@@ -1,7 +1,7 @@
 "use client";
 
 import { DashboardData, Transaction } from "@/lib/types";
-import { formatClp } from "@/lib/utils";
+import { formatClp, parsePositiveInteger } from "@/lib/utils";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 const boxClass =
@@ -16,7 +16,14 @@ async function requestJson(url: string, options?: RequestInit) {
     },
   });
 
-  const result = (await response.json().catch(() => ({}))) as { error?: string };
+  let result: { error?: string } = {};
+  try {
+    result = (await response.json()) as { error?: string };
+  } catch {
+    if (!response.ok) {
+      throw new Error("La respuesta del servidor no es JSON válido.");
+    }
+  }
 
   if (!response.ok) {
     throw new Error(result.error ?? "Error inesperado en la petición");
@@ -30,6 +37,10 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editOccurredAt, setEditOccurredAt] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -218,29 +229,48 @@ export function Dashboard() {
     });
   };
 
-  const onEditTransaction = async (transaction: Transaction) => {
-    const amountText = window.prompt("Nuevo monto", String(transaction.amount));
-    if (!amountText) return;
+  const beginEditTransaction = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+    setEditAmount(String(transaction.amount));
+    setEditDescription(transaction.description ?? "");
+    setEditOccurredAt(transaction.occurredAt);
+  };
 
-    const parsedAmount = Number(amountText);
-    const description = window.prompt(
-      "Nueva descripción (puedes dejar vacío)",
-      transaction.description ?? "",
-    );
-    const occurredAt = window.prompt("Fecha YYYY-MM-DD", transaction.occurredAt);
+  const cancelEditTransaction = () => {
+    setEditingTransaction(null);
+    setEditAmount("");
+    setEditDescription("");
+    setEditOccurredAt("");
+  };
+
+  const submitTransactionEdit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingTransaction) return;
+    let editedAmount: number;
+    try {
+      editedAmount = parsePositiveInteger(editAmount, "Monto editado");
+    } catch (validationError) {
+      setError(
+        validationError instanceof Error
+          ? validationError.message
+          : "El monto editado debe ser un entero positivo.",
+      );
+      return;
+    }
 
     await runAction(async () => {
-      await requestJson(`/api/transactions/${transaction.id}`, {
+      await requestJson(`/api/transactions/${editingTransaction.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          accountId: transaction.accountId,
-          type: transaction.type,
-          amount: parsedAmount,
-          categoryId: transaction.categoryId,
-          description,
-          occurredAt: occurredAt || transaction.occurredAt,
+          accountId: editingTransaction.accountId,
+          type: editingTransaction.type,
+          amount: editedAmount,
+          categoryId: editingTransaction.categoryId,
+          description: editDescription || null,
+          occurredAt: editOccurredAt || editingTransaction.occurredAt,
         }),
       });
+      cancelEditTransaction();
     });
   };
 
@@ -299,7 +329,7 @@ export function Dashboard() {
               <option value="credit">Crédito</option>
             </select>
             <input className="rounded border p-2" name="bank" placeholder="Banco (opcional)" />
-            <input className="rounded border p-2" name="initialBalance" type="number" min="0" defaultValue={0} />
+            <input className="rounded border p-2" name="initialBalance" type="number" min="0" step="1" defaultValue={0} />
             <button className="rounded bg-black px-3 py-2 text-white" disabled={submitting} type="submit">
               Guardar cuenta
             </button>
@@ -321,7 +351,7 @@ export function Dashboard() {
               <option value="income">Ingreso</option>
               <option value="expense">Gasto</option>
             </select>
-            <input className="rounded border p-2" name="amount" type="number" min="1" placeholder="Monto" required />
+            <input className="rounded border p-2" name="amount" type="number" min="1" step="1" placeholder="Monto" required />
             <select className="rounded border p-2" name="categoryId">
               <option value="">Sin categoría</option>
               {data.categories.map((category) => (
@@ -344,8 +374,8 @@ export function Dashboard() {
           <h3 className="mb-2 font-semibold">Crear fondo de ahorro</h3>
           <form className="grid gap-2" onSubmit={(event) => void onCreateSavingsFund(event)}>
             <input className="rounded border p-2" name="name" placeholder="Nombre del fondo" required />
-            <input className="rounded border p-2" name="targetAmount" type="number" min="1" placeholder="Meta" required />
-            <input className="rounded border p-2" name="initialDeposit" type="number" min="0" defaultValue={0} />
+            <input className="rounded border p-2" name="targetAmount" type="number" min="1" step="1" placeholder="Meta" required />
+            <input className="rounded border p-2" name="initialDeposit" type="number" min="0" step="1" defaultValue={0} />
             <select className="rounded border p-2" name="initialAccountId">
               <option value="">Cuenta origen depósito inicial</option>
               {nonCreditAccounts.map((account) => (
@@ -379,8 +409,8 @@ export function Dashboard() {
                 </option>
               ))}
             </select>
-            <input className="rounded border p-2" name="amount" type="number" min="1" required />
-            <input className="rounded border p-2" name="dayOfMonth" type="number" min="1" max="28" defaultValue={1} required />
+            <input className="rounded border p-2" name="amount" type="number" min="1" step="1" required />
+            <input className="rounded border p-2" name="dayOfMonth" type="number" min="1" max="28" step="1" defaultValue={1} required />
             <button className="rounded bg-black px-3 py-2 text-white" disabled={submitting} type="submit">
               Guardar depósito automático
             </button>
@@ -408,7 +438,7 @@ export function Dashboard() {
                 </option>
               ))}
             </select>
-            <input className="rounded border p-2" name="amount" type="number" min="1" required />
+            <input className="rounded border p-2" name="amount" type="number" min="1" step="1" required />
             <button className="rounded bg-black px-3 py-2 text-white" disabled={submitting} type="submit">
               Pagar tarjeta
             </button>
@@ -423,7 +453,7 @@ export function Dashboard() {
               <option value="income">Ingreso</option>
               <option value="expense">Gasto</option>
             </select>
-            <input className="rounded border p-2" name="amount" type="number" min="1" required />
+            <input className="rounded border p-2" name="amount" type="number" min="1" step="1" required />
             <select className="rounded border p-2" name="accountId" required>
               <option value="">Cuenta objetivo</option>
               {data.accounts.map((account) => (
@@ -440,7 +470,7 @@ export function Dashboard() {
                 </option>
               ))}
             </select>
-            <input className="rounded border p-2" name="dayOfMonth" type="number" min="1" max="28" defaultValue={1} required />
+            <input className="rounded border p-2" name="dayOfMonth" type="number" min="1" max="28" step="1" defaultValue={1} required />
             <input className="rounded border p-2" name="nextRun" type="date" />
             <button className="rounded bg-black px-3 py-2 text-white" disabled={submitting} type="submit">
               Guardar recurrente
@@ -473,7 +503,7 @@ export function Dashboard() {
                   <div className="mt-2 flex gap-2">
                     <button
                       className="rounded bg-zinc-800 px-2 py-1 text-xs text-white"
-                      onClick={() => void onEditTransaction(transaction)}
+                      onClick={() => beginEditTransaction(transaction)}
                       type="button"
                     >
                       Editar
@@ -488,6 +518,42 @@ export function Dashboard() {
                   </div>
                 ) : (
                   <p className="mt-2 text-xs text-zinc-500">Movimiento generado por sistema.</p>
+                )}
+                {editingTransaction?.id === transaction.id && (
+                  <form className="mt-2 grid gap-2" onSubmit={(event) => void submitTransactionEdit(event)}>
+                    <input
+                      className="rounded border p-2"
+                      min="1"
+                      step="1"
+                      onChange={(event) => setEditAmount(event.target.value)}
+                      type="number"
+                      value={editAmount}
+                    />
+                    <input
+                      className="rounded border p-2"
+                      onChange={(event) => setEditDescription(event.target.value)}
+                      placeholder="Descripción"
+                      value={editDescription}
+                    />
+                    <input
+                      className="rounded border p-2"
+                      onChange={(event) => setEditOccurredAt(event.target.value)}
+                      type="date"
+                      value={editOccurredAt}
+                    />
+                    <div className="flex gap-2">
+                      <button className="rounded bg-zinc-700 px-2 py-1 text-xs text-white" type="submit">
+                        Guardar cambios
+                      </button>
+                      <button
+                        className="rounded bg-zinc-500 px-2 py-1 text-xs text-white"
+                        onClick={cancelEditTransaction}
+                        type="button"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
                 )}
               </li>
             ))}
