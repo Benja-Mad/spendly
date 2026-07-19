@@ -23,12 +23,15 @@ import {
 
 const mapAccount = (row: RowRecord): Account => ({
   id: String(row.id),
+  userId: String(row.user_id),
   name: String(row.name),
   kind: row.kind as AccountKind,
   bank: (row.bank as string | null) ?? null,
   currency: "CLP",
   balance: Number(row.balance),
   creditDebt: Number(row.credit_debt),
+  statementDay: (row.statement_day as number | null) ?? null,
+  paymentDueDay: (row.payment_due_day as number | null) ?? null,
 });
 
 const mapCategory = (row: RowRecord): Category => ({
@@ -40,6 +43,7 @@ const mapCategory = (row: RowRecord): Category => ({
 
 const mapSavingsFund = (row: RowRecord): SavingsFund => ({
   id: String(row.id),
+  userId: String(row.user_id),
   name: String(row.name),
   targetAmount: Number(row.target_amount),
   currentAmount: Number(row.current_amount),
@@ -50,6 +54,7 @@ const mapSavingsFund = (row: RowRecord): SavingsFund => ({
 
 const mapSavingsAutoDeposit = (row: RowRecord): SavingsAutoDeposit => ({
   id: String(row.id),
+  userId: String(row.user_id),
   fundId: String(row.fund_id),
   accountId: String(row.account_id),
   amount: Number(row.amount),
@@ -60,6 +65,7 @@ const mapSavingsAutoDeposit = (row: RowRecord): SavingsAutoDeposit => ({
 
 const mapRecurringRule = (row: RowRecord): RecurringRule => ({
   id: String(row.id),
+  userId: String(row.user_id),
   name: String(row.name),
   type: row.type as RuleType,
   amount: Number(row.amount),
@@ -71,8 +77,9 @@ const mapRecurringRule = (row: RowRecord): RecurringRule => ({
   isActive: Boolean(row.is_active),
 });
 
-const mapTransaction = (row: RowRecord): Transaction => ({
+export const mapTransaction = (row: RowRecord): Transaction => ({
   id: String(row.id),
+  userId: String(row.user_id),
   accountId: String(row.account_id),
   type: row.type as TransactionType,
   amount: Number(row.amount),
@@ -87,6 +94,7 @@ const mapTransaction = (row: RowRecord): Transaction => ({
 
 const mapAlert = (row: RowRecord): Alert => ({
   id: String(row.id),
+  userId: String(row.user_id),
   kind: String(row.kind),
   title: String(row.title),
   body: String(row.body),
@@ -199,9 +207,16 @@ const reverseMovementFromAccount = async (
   }
 };
 
-const createAlert = async (kind: string, title: string, body: string) => {
+const createAlert = async (
+  userId: string,
+  kind: string,
+  title: string,
+  body: string,
+) => {
   const supabase = getSupabaseAdmin();
-  const { error } = await supabase.from("alerts").insert({ kind, title, body });
+  const { error } = await supabase
+    .from("alerts")
+    .insert({ user_id: userId, kind, title, body });
 
   if (error) {
     throw new Error("No se pudo crear la alerta in-app.");
@@ -227,18 +242,18 @@ const incrementRecurringDate = (rule: RecurringRule, fromDate: Date) => {
   return next;
 };
 
-export const getDashboardData = async (): Promise<DashboardData> => {
+export const getDashboardData = async (userId: string): Promise<DashboardData> => {
   const supabase = getSupabaseAdmin();
 
   const [accountsRes, categoriesRes, fundsRes, autoRes, recurringRes, transactionsRes, alertsRes] =
     await Promise.all([
-      supabase.from("accounts").select("*").order("created_at", { ascending: false }),
+      supabase.from("accounts").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
       supabase.from("categories").select("*").order("name", { ascending: true }),
-      supabase.from("savings_funds").select("*").order("created_at", { ascending: false }),
-      supabase.from("savings_auto_deposits").select("*").order("created_at", { ascending: false }),
-      supabase.from("recurring_rules").select("*").order("created_at", { ascending: false }),
-      supabase.from("transactions").select("*").order("occurred_at", { ascending: false }).limit(30),
-      supabase.from("alerts").select("*").order("created_at", { ascending: false }).limit(20),
+      supabase.from("savings_funds").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
+      supabase.from("savings_auto_deposits").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
+      supabase.from("recurring_rules").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
+      supabase.from("transactions").select("*").eq("user_id", userId).order("occurred_at", { ascending: false }).limit(30),
+      supabase.from("alerts").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
     ]);
 
   const responses = [accountsRes, categoriesRes, fundsRes, autoRes, recurringRes, transactionsRes, alertsRes];
@@ -283,10 +298,13 @@ export const getDashboardData = async (): Promise<DashboardData> => {
 };
 
 export const createAccount = async (payload: {
+  userId: string;
   name: string;
   kind: AccountKind;
   bank?: string | null;
   initialBalance?: number;
+  statementDay?: number | null;
+  paymentDueDay?: number | null;
 }) => {
   const supabase = getSupabaseAdmin();
 
@@ -297,13 +315,25 @@ export const createAccount = async (payload: {
 
   const initialBalance = parseNonNegativeInteger(payload.initialBalance ?? 0, "Saldo inicial");
 
-  const dataToInsert = {
+  if (payload.kind === "credit") {
+    if (payload.statementDay && (payload.statementDay < 1 || payload.statementDay > 28)) {
+      throw new Error("El día de facturación debe estar entre 1 y 28.");
+    }
+    if (payload.paymentDueDay && (payload.paymentDueDay < 1 || payload.paymentDueDay > 28)) {
+      throw new Error("El día de vencimiento debe estar entre 1 y 28.");
+    }
+  }
+
+  const dataToInsert: Record<string, unknown> = {
+    user_id: payload.userId,
     name,
     kind: payload.kind,
     bank: payload.bank?.trim() ? payload.bank.trim() : null,
     currency: "CLP",
     balance: payload.kind === "credit" ? 0 : initialBalance,
     credit_debt: payload.kind === "credit" ? initialBalance : 0,
+    statement_day: payload.kind === "credit" ? (payload.statementDay ?? null) : null,
+    payment_due_day: payload.kind === "credit" ? (payload.paymentDueDay ?? null) : null,
   };
 
   const { error } = await supabase.from("accounts").insert(dataToInsert);
@@ -314,6 +344,7 @@ export const createAccount = async (payload: {
 };
 
 export const createManualTransaction = async (payload: {
+  userId: string;
   accountId: string;
   type: "income" | "expense";
   amount: number;
@@ -326,9 +357,14 @@ export const createManualTransaction = async (payload: {
   const amount = parsePositiveInteger(payload.amount, "Monto");
   const account = await getAccount(payload.accountId);
 
+  if (account.userId !== payload.userId) {
+    throw new Error("No tienes permiso para operar en esta cuenta.");
+  }
+
   await applyMovementToAccount(account, payload.type, amount);
 
   const { error } = await supabase.from("transactions").insert({
+    user_id: payload.userId,
     account_id: payload.accountId,
     type: payload.type,
     amount,
@@ -348,6 +384,7 @@ export const createManualTransaction = async (payload: {
 export const updateManualTransaction = async (
   transactionId: string,
   payload: {
+    userId: string;
     accountId: string;
     type: "income" | "expense";
     amount: number;
@@ -363,6 +400,7 @@ export const updateManualTransaction = async (
     .from("transactions")
     .select("*")
     .eq("id", transactionId)
+    .eq("user_id", payload.userId)
     .single();
 
   if (existingError || !existingData) {
@@ -393,7 +431,8 @@ export const updateManualTransaction = async (
         description: payload.description?.trim() || null,
         occurred_at: payload.occurredAt ?? existing.occurredAt,
       })
-      .eq("id", transactionId);
+      .eq("id", transactionId)
+      .eq("user_id", payload.userId);
 
     if (error) {
       throw new Error(`No se pudo editar movimiento: ${error.message}`);
@@ -406,13 +445,17 @@ export const updateManualTransaction = async (
   }
 };
 
-export const deleteManualTransaction = async (transactionId: string) => {
+export const deleteManualTransaction = async (
+  transactionId: string,
+  userId: string,
+) => {
   const supabase = getSupabaseAdmin();
 
   const { data, error } = await supabase
     .from("transactions")
     .select("*")
     .eq("id", transactionId)
+    .eq("user_id", userId)
     .single();
 
   if (error || !data) {
@@ -429,7 +472,11 @@ export const deleteManualTransaction = async (transactionId: string) => {
   const account = await getAccount(transaction.accountId);
   await reverseMovementFromAccount(account, transactionType, transaction.amount);
 
-  const { error: deleteError } = await supabase.from("transactions").delete().eq("id", transaction.id);
+  const { error: deleteError } = await supabase
+    .from("transactions")
+    .delete()
+    .eq("id", transaction.id)
+    .eq("user_id", userId);
 
   if (deleteError) {
     await applyMovementToAccount(
@@ -442,7 +489,82 @@ export const deleteManualTransaction = async (transactionId: string) => {
   }
 };
 
+export const createManualSavingsDeposit = async (payload: {
+  userId: string;
+  fundId: string;
+  accountId: string;
+  amount: number;
+}) => {
+  const supabase = getSupabaseAdmin();
+
+  const amount = parsePositiveInteger(payload.amount, "Monto");
+
+  const account = await getAccount(payload.accountId);
+  if (account.kind === "credit") {
+    throw new Error("El depósito debe salir de una cuenta disponible, no de crédito.");
+  }
+  if (account.userId !== payload.userId) {
+    throw new Error("No tienes permiso para operar en esta cuenta.");
+  }
+  if (account.balance < amount) {
+    throw new Error("Saldo insuficiente en la cuenta origen.");
+  }
+
+  const { data: fundData, error: fundError } = await supabase
+    .from("savings_funds")
+    .select("*")
+    .eq("id", payload.fundId)
+    .eq("user_id", payload.userId)
+    .single();
+
+  if (fundError || !fundData) {
+    throw new Error("Fondo de ahorro no encontrado.");
+  }
+
+  const fund = mapSavingsFund(fundData as RowRecord);
+
+  const { error: accountError } = await supabase
+    .from("accounts")
+    .update({ balance: account.balance - amount })
+    .eq("id", account.id);
+
+  if (accountError) {
+    throw new Error("No se pudo descontar el saldo de la cuenta origen.");
+  }
+
+  const { error: fundError2 } = await supabase
+    .from("savings_funds")
+    .update({ current_amount: fund.currentAmount + amount })
+    .eq("id", fund.id);
+
+  if (fundError2) {
+    await supabase
+      .from("accounts")
+      .update({ balance: account.balance })
+      .eq("id", account.id);
+
+    throw new Error("No se pudo actualizar el fondo de ahorro.");
+  }
+
+  const { error: transactionError } = await supabase.from("transactions").insert({
+    user_id: payload.userId,
+    account_id: account.id,
+    type: "savings_deposit",
+    amount,
+    currency: "CLP",
+    description: `Depósito manual a fondo ${fund.name}`,
+    occurred_at: toIsoDate(new Date()),
+    savings_fund_id: fund.id,
+    origin: "system",
+  });
+
+  if (transactionError) {
+    throw new Error("Depósito realizado pero no se pudo registrar la transacción.");
+  }
+};
+
 export const createSavingsFund = async (payload: {
+  userId: string;
   name: string;
   targetAmount: number;
   initialDeposit: number;
@@ -476,6 +598,7 @@ export const createSavingsFund = async (payload: {
   const { data: insertedFund, error: fundError } = await supabase
     .from("savings_funds")
     .insert({
+      user_id: payload.userId,
       name,
       target_amount: targetAmount,
       current_amount: initialDeposit,
@@ -490,6 +613,8 @@ export const createSavingsFund = async (payload: {
     throw new Error(`No se pudo crear fondo de ahorro: ${fundError?.message ?? "error desconocido"}`);
   }
 
+  const fundId = String(insertedFund.id);
+
   if (sourceAccount) {
     const { error: accountError } = await supabase
       .from("accounts")
@@ -497,18 +622,19 @@ export const createSavingsFund = async (payload: {
       .eq("id", sourceAccount.id);
 
     if (accountError) {
-      await supabase.from("savings_funds").delete().eq("id", insertedFund.id);
+      await supabase.from("savings_funds").delete().eq("id", fundId);
       throw new Error("No se pudo descontar el depósito inicial de la cuenta origen.");
     }
 
     const { error: movementError } = await supabase.from("transactions").insert({
+      user_id: payload.userId,
       account_id: sourceAccount.id,
       type: "savings_deposit",
       amount: initialDeposit,
       currency: "CLP",
       description: `Depósito inicial fondo ${name}`,
       occurred_at: toIsoDate(new Date()),
-      savings_fund_id: insertedFund.id,
+      savings_fund_id: fundId,
       origin: "system",
     });
 
@@ -516,9 +642,12 @@ export const createSavingsFund = async (payload: {
       throw new Error("Fondo creado pero no se pudo registrar movimiento de depósito inicial.");
     }
   }
+
+  return { id: fundId };
 };
 
 export const createSavingsAutoDeposit = async (payload: {
+  userId: string;
   fundId: string;
   accountId: string;
   amount: number;
@@ -543,6 +672,7 @@ export const createSavingsAutoDeposit = async (payload: {
   const startMonthDate = payload.startMonth ?? toIsoDate(addMonths(monthStart(), 1));
 
   const { error } = await supabase.from("savings_auto_deposits").insert({
+    user_id: payload.userId,
     fund_id: payload.fundId,
     account_id: payload.accountId,
     amount,
@@ -557,6 +687,7 @@ export const createSavingsAutoDeposit = async (payload: {
 };
 
 export const payCreditCard = async (payload: {
+  userId: string;
   creditAccountId: string;
   sourceAccountId: string;
   amount: number;
@@ -575,6 +706,10 @@ export const payCreditCard = async (payload: {
 
   if (sourceAccount.kind === "credit") {
     throw new Error("La cuenta de pago no puede ser de crédito.");
+  }
+
+  if (creditAccount.userId !== payload.userId || sourceAccount.userId !== payload.userId) {
+    throw new Error("No tienes permiso para operar estas cuentas.");
   }
 
   if (sourceAccount.balance < amount) {
@@ -612,6 +747,7 @@ export const payCreditCard = async (payload: {
 
   const { error: transactionError } = await supabase.from("transactions").insert([
     {
+      user_id: payload.userId,
       account_id: sourceAccount.id,
       type: "credit_payment",
       amount,
@@ -621,6 +757,7 @@ export const payCreditCard = async (payload: {
       origin: "system",
     },
     {
+      user_id: payload.userId,
       account_id: creditAccount.id,
       type: "credit_payment",
       amount,
@@ -637,6 +774,7 @@ export const payCreditCard = async (payload: {
 };
 
 export const createRecurringRule = async (payload: {
+  userId: string;
   name: string;
   type: RuleType;
   amount: number;
@@ -656,6 +794,7 @@ export const createRecurringRule = async (payload: {
   }
 
   const { error } = await supabase.from("recurring_rules").insert({
+    user_id: payload.userId,
     name: payload.name.trim(),
     type: payload.type,
     amount,
@@ -694,6 +833,7 @@ export const runRecurringRules = async (runDate: string = toIsoDate(new Date()))
       await applyMovementToAccount(account, rule.type, rule.amount);
 
       const { error: movementError } = await supabase.from("transactions").insert({
+        user_id: rule.userId,
         account_id: rule.accountId,
         type: rule.type === "income" ? "recurring_income" : "recurring_expense",
         amount: rule.amount,
@@ -722,6 +862,7 @@ export const runRecurringRules = async (runDate: string = toIsoDate(new Date()))
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido";
       await createAlert(
+        rule.userId,
         "recurring_failed",
         "Regla recurrente no ejecutada",
         `No se pudo ejecutar '${rule.name}': ${message}`,
@@ -757,6 +898,7 @@ const runSavingsAutoDeposits = async (runDate: string) => {
 
     if (account.balance < entry.amount) {
       await createAlert(
+        entry.userId,
         "savings_auto_deposit_failed",
         "Depósito automático no ejecutado",
         `No hay saldo suficiente para depositar ${entry.amount} en un fondo de ahorro.`,
@@ -772,6 +914,7 @@ const runSavingsAutoDeposits = async (runDate: string) => {
 
     if (fundError || !fundData) {
       await createAlert(
+        entry.userId,
         "savings_auto_deposit_failed",
         "Depósito automático no ejecutado",
         "No se encontró fondo de ahorro para el depósito automático.",
@@ -788,6 +931,7 @@ const runSavingsAutoDeposits = async (runDate: string) => {
 
     if (accountUpdateError) {
       await createAlert(
+        entry.userId,
         "savings_auto_deposit_failed",
         "Depósito automático no ejecutado",
         `No se pudo descontar saldo de '${account.name}' para fondo '${fund.name}': ${accountUpdateError.message}`,
@@ -811,6 +955,7 @@ const runSavingsAutoDeposits = async (runDate: string) => {
         : "";
 
       await createAlert(
+        entry.userId,
         "savings_auto_deposit_failed",
         "Depósito automático no ejecutado",
         `No se pudo actualizar fondo '${fund.name}': ${fundUpdateError.message}.${rollbackMessage}`,
@@ -820,6 +965,7 @@ const runSavingsAutoDeposits = async (runDate: string) => {
     }
 
     await supabase.from("transactions").insert({
+      user_id: entry.userId,
       account_id: account.id,
       type: "savings_deposit",
       amount: entry.amount,
@@ -832,12 +978,193 @@ const runSavingsAutoDeposits = async (runDate: string) => {
   }
 };
 
-export const markAlertAsRead = async (alertId: string) => {
+export const markAlertAsRead = async (alertId: string, userId: string) => {
   const supabase = getSupabaseAdmin();
 
-  const { error } = await supabase.from("alerts").update({ is_read: true }).eq("id", alertId);
+  const { error } = await supabase
+    .from("alerts")
+    .update({ is_read: true })
+    .eq("id", alertId)
+    .eq("user_id", userId);
 
   if (error) {
     throw new Error(`No se pudo marcar alerta como leída: ${error.message}`);
   }
+};
+
+export const getAccountById = async (accountId: string, userId: string) => {
+  const supabase = getSupabaseAdmin();
+
+  const { data, error } = await supabase
+    .from("accounts")
+    .select("*")
+    .eq("id", accountId)
+    .eq("user_id", userId)
+    .single();
+
+  if (error || !data) {
+    throw new Error("Cuenta no encontrada.");
+  }
+
+  return mapAccount(data as RowRecord);
+};
+
+export const updateSavingsFund = async (payload: {
+  userId: string;
+  fundId: string;
+  name?: string;
+  targetAmount?: number;
+}) => {
+  const supabase = getSupabaseAdmin();
+
+  const { data: existingFund, error: existingError } = await supabase
+    .from("savings_funds")
+    .select("*")
+    .eq("id", payload.fundId)
+    .eq("user_id", payload.userId)
+    .single();
+
+  if (existingError || !existingFund) {
+    throw new Error("Fondo de ahorro no encontrado.");
+  }
+
+  const updates: Record<string, unknown> = {};
+
+  if (payload.name !== undefined) {
+    const trimmed = payload.name.trim();
+    if (!trimmed) throw new Error("Nombre del fondo obligatorio.");
+    updates.name = trimmed;
+  }
+
+  if (payload.targetAmount !== undefined) {
+    updates.target_amount = parsePositiveInteger(payload.targetAmount, "Meta");
+  }
+
+  if (Object.keys(updates).length === 0) return;
+
+  const { error } = await supabase
+    .from("savings_funds")
+    .update(updates)
+    .eq("id", payload.fundId)
+    .eq("user_id", payload.userId);
+
+  if (error) {
+    throw new Error(`No se pudo actualizar el fondo: ${error.message}`);
+  }
+};
+
+export const deleteSavingsFund = async (fundId: string, userId: string) => {
+  const supabase = getSupabaseAdmin();
+
+  const { data: fundData, error: fundError } = await supabase
+    .from("savings_funds")
+    .select("*")
+    .eq("id", fundId)
+    .eq("user_id", userId)
+    .single();
+
+  if (fundError || !fundData) {
+    throw new Error("Fondo de ahorro no encontrado.");
+  }
+
+  const fund = mapSavingsFund(fundData as RowRecord);
+
+  if (fund.currentAmount > 0 && fund.initialAccountId) {
+    const account = await getAccount(fund.initialAccountId);
+
+    if (account.userId !== userId) {
+      throw new Error("No tienes permiso para operar esta cuenta.");
+    }
+
+    if (account.kind !== "credit") {
+      const { error: accountError } = await supabase
+        .from("accounts")
+        .update({ balance: account.balance + fund.currentAmount })
+        .eq("id", account.id);
+
+      if (accountError) {
+        throw new Error("No se pudo liberar el saldo del fondo.");
+      }
+
+      const { error: transactionError } = await supabase.from("transactions").insert({
+        user_id: userId,
+        account_id: account.id,
+        type: "income",
+        amount: fund.currentAmount,
+        currency: "CLP",
+        description: `Liberación de fondo de ahorro: ${fund.name}`,
+        occurred_at: toIsoDate(new Date()),
+        savings_fund_id: fund.id,
+        origin: "system",
+      });
+
+      if (transactionError) {
+        throw new Error("Saldo liberado pero no se pudo registrar la transacción.");
+      }
+    }
+  }
+
+  const { error: deleteError } = await supabase
+    .from("savings_funds")
+    .delete()
+    .eq("id", fund.id)
+    .eq("user_id", userId);
+
+  if (deleteError) {
+    throw new Error(`No se pudo eliminar el fondo: ${deleteError.message}`);
+  }
+};
+
+export const updateAccount = async (payload: {
+  userId: string;
+  accountId: string;
+  name?: string;
+  bank?: string | null;
+  statementDay?: number | null;
+  paymentDueDay?: number | null;
+}) => {
+  const supabase = getSupabaseAdmin();
+
+  const existing = await getAccountById(payload.accountId, payload.userId);
+
+  const updates: Record<string, unknown> = {};
+
+  if (payload.name !== undefined) {
+    const trimmed = payload.name.trim();
+    if (!trimmed) throw new Error("Nombre de cuenta obligatorio.");
+    updates.name = trimmed;
+  }
+
+  if (payload.bank !== undefined) {
+    updates.bank = payload.bank?.trim() ? payload.bank.trim() : null;
+  }
+
+  if (existing.kind === "credit") {
+    if (payload.statementDay !== undefined) {
+      if (payload.statementDay !== null && (payload.statementDay < 1 || payload.statementDay > 28)) {
+        throw new Error("El día de facturación debe estar entre 1 y 28.");
+      }
+      updates.statement_day = payload.statementDay;
+    }
+    if (payload.paymentDueDay !== undefined) {
+      if (payload.paymentDueDay !== null && (payload.paymentDueDay < 1 || payload.paymentDueDay > 28)) {
+        throw new Error("El día de vencimiento debe estar entre 1 y 28.");
+      }
+      updates.payment_due_day = payload.paymentDueDay;
+    }
+  }
+
+  if (Object.keys(updates).length === 0) return existing;
+
+  const { error } = await supabase
+    .from("accounts")
+    .update(updates)
+    .eq("id", payload.accountId)
+    .eq("user_id", payload.userId);
+
+  if (error) {
+    throw new Error(`No se pudo actualizar la cuenta: ${error.message}`);
+  }
+
+  return getAccountById(payload.accountId, payload.userId);
 };

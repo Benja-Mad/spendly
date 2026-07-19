@@ -1,5 +1,5 @@
 import { getSupabaseRouteHandler } from "@/lib/supabase";
-import { payCreditCard } from "@/lib/finance";
+import { createManualSavingsDeposit } from "@/lib/finance";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -12,25 +12,23 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as {
-      creditAccountId?: string;
-      sourceAccountId?: string;
+      fundId?: string;
+      accountId?: string;
       amount?: number;
-      occurredAt?: string;
     };
 
-    if (!body.creditAccountId || !body.sourceAccountId || !body.amount) {
+    if (!body.fundId || !body.accountId || !body.amount) {
       return NextResponse.json(
-        { error: "creditAccountId, sourceAccountId y amount son obligatorios." },
+        { error: "fundId, accountId y amount son obligatorios." },
         { status: 400 },
       );
     }
 
-    await payCreditCard({
+    await createManualSavingsDeposit({
       userId: user.id,
-      creditAccountId: body.creditAccountId,
-      sourceAccountId: body.sourceAccountId,
+      fundId: body.fundId,
+      accountId: body.accountId,
       amount: body.amount,
-      occurredAt: body.occurredAt,
     });
 
     return NextResponse.json({ ok: true });

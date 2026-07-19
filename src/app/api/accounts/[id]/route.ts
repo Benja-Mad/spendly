@@ -1,9 +1,27 @@
 import { getSupabaseRouteHandler } from "@/lib/supabase";
-import { deleteManualTransaction, updateManualTransaction } from "@/lib/finance";
+import { getAccountById, updateAccount } from "@/lib/finance";
 import { NextResponse } from "next/server";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
+}
+
+export async function GET(_request: Request, context: RouteContext) {
+  try {
+    const supabase = await getSupabaseRouteHandler();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+    }
+
+    const { id } = await context.params;
+    const account = await getAccountById(id, user.id);
+    return NextResponse.json({ account });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Error inesperado";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -17,48 +35,22 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const { id } = await context.params;
     const body = (await request.json()) as {
-      accountId?: string;
-      type?: "income" | "expense";
-      amount?: number;
-      categoryId?: string | null;
-      description?: string | null;
-      occurredAt?: string;
+      name?: string;
+      bank?: string | null;
+      statementDay?: number | null;
+      paymentDueDay?: number | null;
     };
 
-    if (!body.accountId || !body.type || !body.amount) {
-      return NextResponse.json({ error: "accountId, type y amount son obligatorios." }, { status: 400 });
-    }
-
-    await updateManualTransaction(id, {
+    const account = await updateAccount({
       userId: user.id,
-      accountId: body.accountId,
-      type: body.type,
-      amount: body.amount,
-      categoryId: body.categoryId,
-      description: body.description,
-      occurredAt: body.occurredAt,
+      accountId: id,
+      name: body.name,
+      bank: body.bank,
+      statementDay: body.statementDay,
+      paymentDueDay: body.paymentDueDay,
     });
 
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Error inesperado";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-}
-
-export async function DELETE(_request: Request, context: RouteContext) {
-  try {
-    const supabase = await getSupabaseRouteHandler();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
-    }
-
-    const { id } = await context.params;
-    await deleteManualTransaction(id, user.id);
-
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ account });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error inesperado";
     return NextResponse.json({ error: message }, { status: 400 });

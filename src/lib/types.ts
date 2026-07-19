@@ -16,14 +16,24 @@ export type RuleFrequency = "monthly" | "biweekly" | "weekly";
 
 export type RowRecord = Record<string, unknown>;
 
+export interface Profile {
+  id: string;
+  email: string;
+  full_name: string | null;
+  created_at: string;
+}
+
 export interface Account {
   id: string;
+  userId: string;
   name: string;
   kind: AccountKind;
   bank: string | null;
   currency: Currency;
   balance: number;
   creditDebt: number;
+  statementDay: number | null;
+  paymentDueDay: number | null;
 }
 
 export interface Category {
@@ -35,6 +45,7 @@ export interface Category {
 
 export interface SavingsFund {
   id: string;
+  userId: string;
   name: string;
   targetAmount: number;
   currentAmount: number;
@@ -45,6 +56,7 @@ export interface SavingsFund {
 
 export interface SavingsAutoDeposit {
   id: string;
+  userId: string;
   fundId: string;
   accountId: string;
   amount: number;
@@ -55,6 +67,7 @@ export interface SavingsAutoDeposit {
 
 export interface RecurringRule {
   id: string;
+  userId: string;
   name: string;
   type: RuleType;
   amount: number;
@@ -68,6 +81,7 @@ export interface RecurringRule {
 
 export interface Transaction {
   id: string;
+  userId: string;
   accountId: string;
   type: TransactionType;
   amount: number;
@@ -82,6 +96,7 @@ export interface Transaction {
 
 export interface Alert {
   id: string;
+  userId: string;
   kind: string;
   title: string;
   body: string;

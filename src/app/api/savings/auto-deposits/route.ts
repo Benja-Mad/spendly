@@ -1,8 +1,16 @@
+import { getSupabaseRouteHandler } from "@/lib/supabase";
 import { createSavingsAutoDeposit } from "@/lib/finance";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
+    const supabase = await getSupabaseRouteHandler();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+    }
+
     const body = (await request.json()) as {
       fundId?: string;
       accountId?: string;
@@ -19,6 +27,7 @@ export async function POST(request: Request) {
     }
 
     await createSavingsAutoDeposit({
+      userId: user.id,
       fundId: body.fundId,
       accountId: body.accountId,
       amount: body.amount,
