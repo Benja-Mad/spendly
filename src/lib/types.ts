@@ -19,6 +19,7 @@ export type RowRecord = Record<string, unknown>;
 export interface Profile {
   id: string;
   email: string;
+  username: string | null;
   full_name: string | null;
   created_at: string;
 }
@@ -120,4 +121,77 @@ export interface DashboardData {
   recurringRules: RecurringRule[];
   transactions: Transaction[];
   alerts: Alert[];
+}
+
+export type JuntaMemberRole = "owner" | "member";
+
+export interface Junta {
+  id: string;
+  name: string;
+  description: string | null;
+  inviteCode: string;
+  ownerId: string;
+  isClosed: boolean;
+  createdAt: string;
+}
+
+export interface JuntaCategory {
+  id: string;
+  juntaId: string;
+  name: string;
+}
+
+export interface JuntaMember {
+  id: string;
+  juntaId: string;
+  userId: string;
+  role: JuntaMemberRole;
+  joinedAt: string;
+  profile?: Profile;
+}
+
+export interface JuntaProduct {
+  id: string;
+  juntaId: string;
+  userId: string;
+  assignedTo: string | null;
+  categoryId: string | null;
+  name: string;
+  link: string | null;
+  imageUrl: string | null;
+  amount: number;
+  quantity: number;
+  createdAt: string;
+  category?: JuntaCategory;
+  user?: Profile;
+  assignedUser?: Profile | null;
+}
+
+export interface JuntaSettlement {
+  id: string;
+  juntaId: string;
+  fromUserId: string;
+  toUserId: string;
+  amount: number;
+  isPaid: boolean;
+  createdAt: string;
+  fromUser?: Profile;
+  toUser?: Profile;
+}
+
+export interface JuntaBalance {
+  userId: string;
+  username: string | null;
+  totalSpent: number;
+  totalOwed: number;
+  net: number;
+}
+
+export interface JuntaDetail {
+  junta: Junta;
+  members: JuntaMember[];
+  categories: JuntaCategory[];
+  products: JuntaProduct[];
+  settlements: JuntaSettlement[];
+  balances: JuntaBalance[];
 }

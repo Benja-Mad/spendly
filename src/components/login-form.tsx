@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
+import Link from "next/link";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -73,9 +74,14 @@ export function LoginForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="password">
-                Contraseña
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="password">
+                  Contraseña
+                </label>
+                <Link href="/forgot-password" className="text-xs text-emerald-600 hover:text-emerald-500 dark:text-emerald-400">
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </div>
               <input
                 id="password"
                 type="password"
@@ -96,6 +102,13 @@ export function LoginForm() {
             </button>
           </div>
         </form>
+
+        <p className="mt-4 text-center text-sm text-zinc-500">
+          ¿No tienes cuenta?{" "}
+          <Link href="/signup" className="font-medium text-emerald-600 hover:text-emerald-500 dark:text-emerald-400">
+            Crear cuenta
+          </Link>
+        </p>
       </div>
     </div>
   );

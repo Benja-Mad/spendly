@@ -1,4 +1,4 @@
-export async function requestJson(url: string, options?: RequestInit) {
+export async function requestJson<T = Record<string, unknown>>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -7,7 +7,7 @@ export async function requestJson(url: string, options?: RequestInit) {
     },
   });
 
-  let result: any = {};
+  let result: Record<string, unknown> = {};
   try {
     result = await response.json();
   } catch {
@@ -17,8 +17,8 @@ export async function requestJson(url: string, options?: RequestInit) {
   }
 
   if (!response.ok) {
-    throw new Error(result.error ?? "Error inesperado en la petición");
+    throw new Error((result.error as string) ?? "Error inesperado en la petición");
   }
 
-  return result;
+  return result as T;
 }
