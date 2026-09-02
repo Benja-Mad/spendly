@@ -168,6 +168,26 @@ function ProductosTab({
     }
   };
 
+  const handleDeleteCategory = async (catId: string) => {
+    if (!confirm("¿Eliminar esta categoría? Los productos quedarán sin categoría.")) return;
+    try {
+      await requestJson(`/api/juntas/${juntaId}/categories?catId=${catId}`, { method: "DELETE" });
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al eliminar categoría");
+    }
+  };
+
+  const handleDeleteProduct = async (prodId: string) => {
+    if (!confirm("¿Eliminar este producto?")) return;
+    try {
+      await requestJson(`/api/juntas/${juntaId}/products?prodId=${prodId}`, { method: "DELETE" });
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al eliminar producto");
+    }
+  };
+
   const getCategoryTotal = (catId: string) =>
     products
       .filter((p) => p.categoryId === catId)
@@ -258,6 +278,14 @@ function ProductosTab({
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-semibold text-zinc-900 dark:text-white">{formatClp(catTotal)}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat.id); }}
+                  className="cursor-pointer rounded-lg p-1 text-zinc-400 transition-all hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
                 <svg
                   className={`h-5 w-5 text-zinc-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                   fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
@@ -274,7 +302,7 @@ function ProductosTab({
                 ) : (
                   <div className="space-y-2 pt-3">
                     {catProducts.map((product) => (
-                      <ProductRow key={product.id} product={product} onEdit={() => { setEditingProduct(product); setShowGlobalAdd(false); }} />
+                      <ProductRow key={product.id} product={product} onEdit={() => { setEditingProduct(product); setShowGlobalAdd(false); }} onDelete={() => handleDeleteProduct(product.id)} />
                     ))}
                   </div>
                 )}
@@ -322,7 +350,7 @@ function ProductosTab({
               <div className="border-t border-zinc-100 px-5 pb-4 dark:border-zinc-800">
                 <div className="space-y-2 pt-3">
                   {uncategorized.map((product) => (
-                    <ProductRow key={product.id} product={product} onEdit={() => { setEditingProduct(product); setShowGlobalAdd(false); }} />
+                    <ProductRow key={product.id} product={product} onEdit={() => { setEditingProduct(product); setShowGlobalAdd(false); }} onDelete={() => handleDeleteProduct(product.id)} />
                   ))}
                 </div>
               </div>
@@ -341,7 +369,7 @@ function ProductosTab({
   );
 }
 
-function ProductRow({ product, onEdit }: { product: JuntaProduct; onEdit: () => void }) {
+function ProductRow({ product, onEdit, onDelete }: { product: JuntaProduct; onEdit: () => void; onDelete: () => void }) {
   return (
     <div className="flex items-center gap-3 rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800/50">
       {product.imageUrl && (
@@ -388,6 +416,14 @@ function ProductRow({ product, onEdit }: { product: JuntaProduct; onEdit: () => 
           </svg>
         </a>
       )}
+      <button
+        onClick={onDelete}
+        className="shrink-0 cursor-pointer rounded-lg p-1.5 text-zinc-400 transition-all hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      </button>
     </div>
   );
 }
