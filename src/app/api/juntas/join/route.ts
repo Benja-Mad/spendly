@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseRouteHandler } from "@/lib/supabase";
+import { getSupabaseRouteHandler, getSupabaseAdmin } from "@/lib/supabase";
 
 export async function POST(request: Request) {
   const supabase = await getSupabaseRouteHandler();
@@ -16,7 +16,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invite code is required" }, { status: 400 });
   }
 
-  const { data: junta, error: juntaError } = await supabase
+  const admin = getSupabaseAdmin();
+
+  const { data: junta, error: juntaError } = await admin
     .from("juntas")
     .select("id")
     .eq("invite_code", inviteCode.trim())
