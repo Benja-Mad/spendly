@@ -1,222 +1,187 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { DashboardData } from "@/lib/types";
+import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { Account } from "@/lib/types";
 import { formatClp } from "@/lib/utils";
-import { requestJson } from "@/lib/api";
+import { errorMessage } from "@/lib/errors";
+import { useDashboard } from "@/lib/swr";
+import { itemVariants, listVariants } from "@/lib/motion";
 import { AccountCard } from "@/components/account-card";
+import { AccountDetailModal } from "@/components/account-detail-modal";
+import { CreateAccountModal } from "@/components/create-account-modal";
+import { PayCreditModal } from "@/components/pay-credit-modal";
+import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { CardSkeleton, Skeleton } from "@/components/ui/skeleton";
 
 export function TarjetasView() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [accountKind, setAccountKind] = useState("debit");
+  const { data, error, isLoading, mutate } = useDashboard();
+  // El tipo se decide en el botón que abre el modal, no dentro del formulario.
+  const [creating, setCreating] = useState<"credit" | "debit" | null>(null);
+  const [payingCard, setPayingCard] = useState<Account | null>(null);
+  const [selected, setSelected] = useState<Account | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await requestJson("/api/dashboard", { method: "GET", cache: "no-store" }) as DashboardData;
-      setData(result);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al cargar");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const runAction = useCallback(
-    async (runner: () => Promise<unknown>) => {
-      setSubmitting(true);
-      setError(null);
-      try {
-        await runner();
-        await load();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Error");
-      } finally {
-        setSubmitting(false);
-      }
-    },
-    [load],
-  );
-
-  const onCreateAccount = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    const kind = String(formData.get("kind") ?? "debit");
-    await runAction(async () => {
-      await requestJson("/api/accounts", {
-        method: "POST",
-        body: JSON.stringify({
-          name: String(formData.get("name") ?? ""),
-          kind,
-          bank: String(formData.get("bank") ?? "") || null,
-          initialBalance: Number(formData.get("initialBalance") ?? 0),
-          statementDay: kind === "credit" ? Number(formData.get("statementDay") ?? 0) || null : null,
-          paymentDueDay: kind === "credit" ? Number(formData.get("paymentDueDay") ?? 0) || null : null,
-        }),
-      });
-    });
-    form.reset();
-    setAccountKind("debit");
-    setShowCreateForm(false);
-  };
-
-  const onPayCreditCard = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    await runAction(async () => {
-      await requestJson("/api/credit/payments", {
-        method: "POST",
-        body: JSON.stringify({
-          creditAccountId: String(formData.get("creditAccountId") ?? ""),
-          sourceAccountId: String(formData.get("sourceAccountId") ?? ""),
-          amount: Number(formData.get("amount") ?? 0),
-        }),
-      });
-    });
-    form.reset();
-  };
-
-  if (loading) {
+  if (isLoading && !data) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-56" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-2xl" />)}
+        </div>
       </div>
     );
   }
 
   if (!data) {
-    return <div className="py-10 text-center text-zinc-500">No se pudo cargar.</div>;
+    return (
+      <div className="py-10 text-center">
+        <p className="text-zinc-500">No se pudo cargar la información.</p>
+        {error && <p className="mt-2 text-sm text-red-500">{errorMessage(error, "")}</p>}
+        <Button variant="primary" className="mt-4" onClick={() => mutate()}>
+          Reintentar
+        </Button>
+      </div>
+    );
   }
 
   const creditAccounts = data.accounts.filter((a) => a.kind === "credit");
   const nonCreditAccounts = data.accounts.filter((a) => a.kind !== "credit");
+  const hasAccounts = data.accounts.length > 0;
 
   return (
-    <div className="space-y-6">
-      {error && (
-        <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-400">
-          {error}
-        </div>
-      )}
+    <div className="space-y-8">
+      {/*
+        El encabezado no lleva acciones. Crear una tarjeta y crear una cuenta
+        son cosas distintas, así que cada sección tiene su propio botón y el
+        tipo queda decidido antes de abrir el formulario. Antes un único
+        "Nueva cuenta" servía para ambas y había que elegir el tipo adentro.
+      */}
+      <PageHeader title="Tarjetas y cuentas" description="Tus cuentas, tarjetas de crédito y saldos" />
 
-      {/* Summary */}
-      <div className="grid gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs text-zinc-500">Total disponible</p>
-          <p className="text-lg font-bold text-zinc-900 dark:text-white">{formatClp(data.summary.available)}</p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs text-zinc-500">Total ahorrado</p>
-          <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{formatClp(data.summary.saved)}</p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs text-zinc-500">Deuda crédito</p>
-          <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatClp(data.summary.pendingCreditDebt)}</p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs text-zinc-500">Total general</p>
-          <p className="text-lg font-bold text-zinc-900 dark:text-white">{formatClp(data.summary.total)}</p>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryTile label="Total disponible" value={formatClp(data.summary.available)} />
+        <SummaryTile label="Total ahorrado" value={formatClp(data.summary.saved)} tone="emerald" />
+        <SummaryTile label="Deuda crédito" value={formatClp(data.summary.pendingCreditDebt)} tone="red" />
+        <SummaryTile label="Total general" value={formatClp(data.summary.total)} />
       </div>
 
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Tus tarjetas y cuentas</h2>
-        <button
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          className="cursor-pointer rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all hover:shadow-xl hover:scale-[1.02]"
-        >
-          {showCreateForm ? "Cancelar" : "+ Nueva cuenta"}
-        </button>
-      </div>
-
-      {showCreateForm && (
-        <form onSubmit={onCreateAccount} className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="mb-4 font-semibold text-zinc-900 dark:text-white">Nueva cuenta / tarjeta</h3>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <input className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" name="name" placeholder="Nombre" required />
-            <select className="cursor-pointer rounded-xl border border-zinc-200 px-4 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" name="kind" value={accountKind} onChange={(e) => setAccountKind(e.target.value)}>
-              <option value="cash">Efectivo</option>
-              <option value="debit">Débito</option>
-              <option value="checking">Corriente</option>
-              <option value="credit">Crédito</option>
-            </select>
-            <input className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" name="bank" placeholder="Banco (opcional)" />
-            <input className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" name="initialBalance" type="number" min="0" step="1" defaultValue={0} placeholder="Saldo inicial" />
-            {accountKind === "credit" && (
-              <>
-                <input className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" name="statementDay" type="number" min="1" max="28" step="1" placeholder="Día de facturación (cierre)" />
-                <input className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" name="paymentDueDay" type="number" min="1" max="28" step="1" placeholder="Día de vencimiento" />
-              </>
-            )}
-          </div>
-          <button
-            type="submit" disabled={submitting}
-            className="cursor-pointer mt-4 rounded-xl bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-          >
-            Guardar cuenta
-          </button>
-        </form>
-      )}
-
-      {/* Credit cards */}
-      {creditAccounts.length > 0 && (
-        <div>
-          <h3 className="mb-3 text-lg font-semibold text-zinc-800 dark:text-zinc-200">Tarjetas de crédito</h3>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {creditAccounts.map((account) => (
-              <AccountCard key={account.id} account={account} />
-            ))}
+      {!hasAccounts && (
+        <div className="rounded-2xl border border-dashed border-zinc-300 py-16 text-center dark:border-zinc-700">
+          <svg aria-hidden="true" className="mx-auto h-12 w-12 text-zinc-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+            <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+            <line x1="1" y1="10" x2="23" y2="10" />
+          </svg>
+          <p className="mt-4 text-sm text-zinc-500">Todavía no tienes cuentas ni tarjetas</p>
+          <p className="mt-1 text-xs text-zinc-400">Crea una para empezar a registrar movimientos</p>
+          <div className="mt-5 flex justify-center gap-2">
+            <Button variant="primary" onClick={() => setCreating("debit")}>+ Cuenta</Button>
+            <Button onClick={() => setCreating("credit")}>+ Tarjeta de crédito</Button>
           </div>
         </div>
       )}
 
-      {/* Debit/cash/checking */}
-      {nonCreditAccounts.length > 0 && (
-        <div>
-          <h3 className="mb-3 text-lg font-semibold text-zinc-800 dark:text-zinc-200">Cuentas disponibles</h3>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {nonCreditAccounts.map((account) => (
-              <AccountCard key={account.id} account={account} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Pay credit card */}
-      {creditAccounts.length > 0 && nonCreditAccounts.length > 0 && (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="mb-4 font-semibold text-zinc-900 dark:text-white">Pagar tarjeta de crédito</h3>
-          <form onSubmit={onPayCreditCard} className="grid gap-4 sm:grid-cols-3">
-            <select className="cursor-pointer rounded-xl border border-zinc-200 px-4 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" name="creditAccountId" required>
-              <option value="">Tarjeta crédito</option>
-              {creditAccounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
+      {hasAccounts && (
+        <section>
+          <SectionHeader
+            title="Tarjetas de crédito"
+            action={<Button size="sm" onClick={() => setCreating("credit")}>+ Tarjeta</Button>}
+          />
+          {creditAccounts.length === 0 ? (
+            <EmptySection text="No tienes tarjetas de crédito registradas." />
+          ) : (
+            <motion.div variants={listVariants} initial="hidden" animate="visible" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {creditAccounts.map((account) => (
+                <motion.div key={account.id} variants={itemVariants} className="flex">
+                  <AccountCard account={account} onSelect={() => setSelected(account)} />
+                </motion.div>
               ))}
-            </select>
-            <select className="cursor-pointer rounded-xl border border-zinc-200 px-4 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" name="sourceAccountId" required>
-              <option value="">Cuenta de pago</option>
-              {nonCreditAccounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-            <div className="flex gap-2">
-              <input className="flex-1 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" name="amount" type="number" min="1" step="1" placeholder="Monto" required />
-              <button type="submit" disabled={submitting} className="cursor-pointer rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-2.5 text-sm font-medium text-white transition-all hover:shadow-lg disabled:opacity-50">
-                Pagar
-              </button>
-            </div>
-          </form>
-        </div>
+            </motion.div>
+          )}
+        </section>
       )}
+
+      {hasAccounts && (
+        <section>
+          <SectionHeader
+            title="Cuentas"
+            action={<Button size="sm" onClick={() => setCreating("debit")}>+ Cuenta</Button>}
+          />
+          {nonCreditAccounts.length === 0 ? (
+            <EmptySection text="No tienes cuentas de débito, corriente ni efectivo." />
+          ) : (
+            <motion.div variants={listVariants} initial="hidden" animate="visible" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {nonCreditAccounts.map((account) => (
+                <motion.div key={account.id} variants={itemVariants} className="flex">
+                  <AccountCard account={account} onSelect={() => setSelected(account)} />
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </section>
+      )}
+
+      <AnimatePresence>
+        {creating && (
+          <CreateAccountModal key="create-account" initialKind={creating} onClose={() => setCreating(null)} />
+        )}
+        {payingCard && (
+          <PayCreditModal
+            key="pay-credit"
+            creditAccounts={creditAccounts}
+            sourceAccounts={nonCreditAccounts}
+            defaultCreditId={payingCard.id}
+            onClose={() => setPayingCard(null)}
+          />
+        )}
+        {selected && (
+          <AccountDetailModal
+            key="account-detail"
+            account={data.accounts.find((a) => a.id === selected.id) ?? selected}
+            accounts={data.accounts}
+            categories={data.categories}
+            canPay={nonCreditAccounts.length > 0}
+            onPay={() => { const card = selected; setSelected(null); setPayingCard(card); }}
+            onClose={() => setSelected(null)}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function SectionHeader({ title, action }: { title: string; action: React.ReactNode }) {
+  return (
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">{title}</h2>
+      {action}
+    </div>
+  );
+}
+
+function EmptySection({ text }: { text: string }) {
+  return (
+    <p className="rounded-2xl border border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-400 dark:border-zinc-800">
+      {text}
+    </p>
+  );
+}
+
+function SummaryTile({ label, value, tone }: { label: string; value: string; tone?: "emerald" | "red" }) {
+  const toneClass =
+    tone === "emerald"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : tone === "red"
+      ? "text-red-600 dark:text-red-400"
+      : "text-zinc-900 dark:text-white";
+
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <p className="text-xs text-zinc-500">{label}</p>
+      <p className={`text-lg font-bold tabular-nums ${toneClass}`}>{value}</p>
     </div>
   );
 }

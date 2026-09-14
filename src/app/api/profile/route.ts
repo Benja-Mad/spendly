@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin, getSupabaseRouteHandler } from "@/lib/supabase";
+import { readJsonBody } from "@/lib/http";
 
 export async function GET() {
   const supabase = await getSupabaseRouteHandler();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
   const admin = getSupabaseAdmin();
@@ -39,14 +40,14 @@ export async function PATCH(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const admin = getSupabaseAdmin();
 
   if (body.username !== undefined) {
-    const username = body.username?.trim() || null;
+    const username = typeof body.username === "string" ? body.username.trim() || null : null;
 
     if (username && username.length < 3) {
       return NextResponse.json({ error: "El username debe tener al menos 3 caracteres" }, { status: 400 });

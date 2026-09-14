@@ -12,7 +12,7 @@ export async function PATCH(_request: Request, context: RouteContext) {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+      return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
     }
 
     const { id } = await context.params;

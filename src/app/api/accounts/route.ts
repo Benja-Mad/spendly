@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+      return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
     }
 
     const body = (await request.json()) as {
@@ -21,6 +21,7 @@ export async function POST(request: Request) {
       initialBalance?: number;
       statementDay?: number | null;
       paymentDueDay?: number | null;
+      last4?: string | null;
     };
 
     if (!body.kind || !validKinds.has(body.kind)) {
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
       initialBalance: body.initialBalance ?? 0,
       statementDay: body.statementDay,
       paymentDueDay: body.paymentDueDay,
+      last4: body.last4,
     });
 
     return NextResponse.json({ ok: true });

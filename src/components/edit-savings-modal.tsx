@@ -4,6 +4,15 @@ import { useState } from "react";
 import { Account, SavingsFund } from "@/lib/types";
 import { formatClp } from "@/lib/utils";
 import { requestJson } from "@/lib/api";
+import { errorMessage } from "@/lib/errors";
+import { Modal } from "@/components/ui/modal";
+import { Field, inputClass } from "@/components/ui/field";
+import { MoneyInput } from "@/components/ui/money-input";
+import { FormBody } from "@/components/ui/form";
+import { Select } from "@/components/ui/select";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { ProgressBar } from "@/components/ui/progress-bar";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   fund: SavingsFund;
@@ -16,8 +25,9 @@ export function EditSavingsModal({ fund, nonCreditAccounts, onClose, onUpdated }
   const [name, setName] = useState(fund.name);
   const [targetAmount, setTargetAmount] = useState(String(fund.targetAmount));
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<null | "info" | "deposit" | "auto" | "delete">(null);
+  const confirm = useConfirm();
 
   const [depositAccountId, setDepositAccountId] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
@@ -26,219 +36,231 @@ export function EditSavingsModal({ fund, nonCreditAccounts, onClose, onUpdated }
   const [autoAmount, setAutoAmount] = useState("");
   const [autoDay, setAutoDay] = useState("1");
 
-  const progress = fund.targetAmount > 0 ? Math.min(fund.currentAmount / fund.targetAmount, 1) : 0;
-  const progressPercent = Math.round(progress * 100);
+  const progressPercent =
+    fund.targetAmount > 0 ? Math.round((fund.currentAmount / fund.targetAmount) * 100) : 0;
 
-  const handleEdit = async () => {
-    if (name === fund.name && String(fund.targetAmount) === targetAmount) return;
+  const infoChanged = name !== fund.name || String(fund.targetAmount) !== targetAmount;
+
+  const run = async (
+    kind: "info" | "deposit" | "auto" | "delete",
+    action: () => Promise<unknown>,
+    successMessage: string,
+    closeAfter = false,
+  ) => {
     setError(null);
-    await requestJson(`/api/savings/funds/${fund.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ name, targetAmount: Number(targetAmount) }),
-    });
-  };
-
-  const handleDeposit = async () => {
-    if (!depositAccountId || !depositAmount) return;
-    setError(null);
-    await requestJson("/api/savings/deposits", {
-      method: "POST",
-      body: JSON.stringify({
-        fundId: fund.id,
-        accountId: depositAccountId,
-        amount: Number(depositAmount),
-      }),
-    });
-    setDepositAccountId("");
-    setDepositAmount("");
-  };
-
-  const handleAutoDeposit = async () => {
-    if (!autoAccountId || !autoAmount || !autoDay) return;
-    setError(null);
-    await requestJson("/api/savings/auto-deposits", {
-      method: "POST",
-      body: JSON.stringify({
-        fundId: fund.id,
-        accountId: autoAccountId,
-        amount: Number(autoAmount),
-        dayOfMonth: Number(autoDay),
-      }),
-    });
-    setAutoAccountId("");
-    setAutoAmount("");
-    setAutoDay("1");
-  };
-
-  const handleDelete = async () => {
-    setError(null);
-    await requestJson(`/api/savings/funds/${fund.id}`, {
-      method: "DELETE",
-    });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
-
+    setNotice(null);
+    setBusy(kind);
     try {
-      await handleEdit();
-      await handleDeposit();
-      await handleAutoDeposit();
+      await action();
       onUpdated();
-      onClose();
+      if (closeAfter) {
+        onClose();
+      } else {
+        setNotice(successMessage);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error");
+      setError(errorMessage(err, "No se pudo completar la acción."));
     } finally {
-      setSubmitting(false);
+      setBusy(null);
     }
   };
 
-  const handleDeleteClick = async () => {
-    setError(null);
-    setSubmitting(true);
-    try {
-      await handleDelete();
-      onUpdated();
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error");
-    } finally {
-      setSubmitting(false);
-    }
+  const saveInfo = () =>
+    run(
+      "info",
+      () =>
+        requestJson(`/api/savings/funds/${fund.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ name, targetAmount: Number(targetAmount) }),
+        }),
+      "Datos del fondo actualizados.",
+    );
+
+  const addDeposit = () =>
+    run(
+      "deposit",
+      async () => {
+        await requestJson("/api/savings/deposits", {
+          method: "POST",
+          body: JSON.stringify({
+            fundId: fund.id,
+            accountId: depositAccountId,
+            amount: Number(depositAmount),
+          }),
+        });
+        setDepositAccountId("");
+        setDepositAmount("");
+      },
+      "Depósito registrado.",
+    );
+
+  const addAutoDeposit = () =>
+    run(
+      "auto",
+      async () => {
+        await requestJson("/api/savings/auto-deposits", {
+          method: "POST",
+          body: JSON.stringify({
+            fundId: fund.id,
+            accountId: autoAccountId,
+            amount: Number(autoAmount),
+            dayOfMonth: Number(autoDay),
+          }),
+        });
+        setAutoAccountId("");
+        setAutoAmount("");
+        setAutoDay("1");
+      },
+      "Depósito automático creado.",
+    );
+
+  const deleteFund = async () => {
+    const ok = await confirm({
+      title: `¿Eliminar "${fund.name}"?`,
+      description:
+        fund.currentAmount > 0
+          ? `Se liberarán ${formatClp(fund.currentAmount)} a la cuenta original.`
+          : "Este fondo no tiene saldo guardado.",
+    });
+    if (!ok) return;
+    return run(
+      "delete",
+      () => requestJson(`/api/savings/funds/${fund.id}`, { method: "DELETE" }),
+      "",
+      true,
+    );
   };
+
+  const depositValid = Boolean(depositAccountId) && Number(depositAmount) > 0;
+  const autoValid = Boolean(autoAccountId) && Number(autoAmount) > 0 && Number(autoDay) >= 1;
+  const anyBusy = busy !== null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="mx-4 flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Editar fondo</h2>
-          <button onClick={onClose} className="cursor-pointer rounded-xl p-2 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <Modal title="Editar fondo" onClose={onClose}>
+      <FormBody>
+        {error && (
+          <div role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-400">
+            {error}
+          </div>
+        )}
+        {notice && (
+          <div role="status" className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+            {notice}
+          </div>
+        )}
+
+        <div className="rounded-xl bg-zinc-50 p-4 dark:bg-zinc-800/50">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-semibold text-zinc-900 dark:text-white">{fund.name}</span>
+            <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+              {formatClp(fund.currentAmount)}
+            </span>
+          </div>
+          <ProgressBar
+            className="mb-2"
+            value={fund.currentAmount}
+            max={fund.targetAmount}
+            label={`Progreso de ${fund.name}`}
+          />
+          <p className="text-right text-xs text-zinc-400">
+            {progressPercent}% · Meta: {formatClp(fund.targetAmount)}
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
-          {error && (
-            <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-400">
-              {error}
-            </div>
-          )}
-
-          {/* Fund info */}
-          <div className="rounded-xl bg-zinc-50 p-4 dark:bg-zinc-800/50">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-semibold text-zinc-900 dark:text-white">{fund.name}</span>
-              <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                {formatClp(fund.currentAmount)}
-              </span>
-            </div>
-            <div className="mb-2 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-            <p className="text-right text-xs text-zinc-400">{progressPercent}% · Meta: {formatClp(fund.targetAmount)}</p>
-          </div>
-
-          {/* Edit info */}
-          <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-            <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Información del fondo</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <input value={name} onChange={(e) => setName(e.target.value)} required
-                className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" placeholder="Nombre" />
-              <input value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} type="number" min="1" step="1" required
-                className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" placeholder="Meta" />
-            </div>
-          </div>
-
-          {/* Manual deposit */}
-          <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-            <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Agregar depósito</h3>
-            <div className="flex gap-2">
-              <select value={depositAccountId} onChange={(e) => setDepositAccountId(e.target.value)}
-                className="cursor-pointer flex-1 rounded-xl border border-zinc-200 px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800">
-                <option value="">Cuenta origen</option>
-                {nonCreditAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
-              <input value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} type="number" min="1" step="1" placeholder="Monto"
-                className="w-28 rounded-xl border border-zinc-200 px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" />
-            </div>
-          </div>
-
-          {/* Auto-deposit */}
-          <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-            <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Depósito automático mensual</h3>
-            <div className="flex gap-2">
-              <select value={autoAccountId} onChange={(e) => setAutoAccountId(e.target.value)}
-                className="cursor-pointer flex-1 rounded-xl border border-zinc-200 px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800">
-                <option value="">Cuenta origen</option>
-                {nonCreditAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
-              <input value={autoAmount} onChange={(e) => setAutoAmount(e.target.value)} type="number" min="1" step="1" placeholder="Monto"
-                className="w-28 rounded-xl border border-zinc-200 px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" />
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-zinc-500">Día</span>
-                <input value={autoDay} onChange={(e) => setAutoDay(e.target.value)} type="number" min="1" max="28"
-                  className="w-14 rounded-xl border border-zinc-200 px-2 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" />
-              </div>
-            </div>
-          </div>
-
-          {/* Delete */}
-          <div className="rounded-xl border border-red-200 p-4 dark:border-red-900/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">Zona peligrosa</h3>
-                <p className="text-xs text-zinc-500">
-                  {fund.currentAmount > 0
-                    ? `Se liberarán ${formatClp(fund.currentAmount)} a la cuenta original.`
-                    : "No hay saldo guardado en este fondo."}
-                </p>
-              </div>
-              {!confirmDelete ? (
-                <button type="button" onClick={() => setConfirmDelete(true)}
-                  className="cursor-pointer rounded-xl bg-red-600 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-red-500">
-                  Eliminar fondo
-                </button>
-              ) : (
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => setConfirmDelete(false)}
-                    className="cursor-pointer rounded-xl bg-zinc-100 px-4 py-2 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                    Cancelar
-                  </button>
-                  <button type="button" onClick={handleDeleteClick} disabled={submitting}
-                    className="cursor-pointer rounded-xl bg-red-600 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50">
-                    {submitting ? "Eliminando..." : "Confirmar eliminación"}
-                  </button>
-                </div>
+        {/*
+          Antes un solo boton "Guardar cambios" disparaba en cadena la edicion,
+          el deposito manual y el deposito automatico. Si habias escrito algo en
+          "Agregar deposito" mientras solo querias renombrar el fondo, se movia
+          plata sin querer; y si el segundo paso fallaba, el primero ya estaba
+          aplicado. Ahora cada bloque se confirma por separado.
+        */}
+        <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            Información del fondo
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Nombre">
+              {(props) => (
+                <input {...props} className={inputClass} value={name} onChange={(e) => setName(e.target.value)} required />
               )}
-            </div>
+            </Field>
+            <Field label="Meta">
+              {(props) => (
+                <MoneyInput {...props} value={targetAmount} onChange={setTargetAmount} required />
+              )}
+            </Field>
           </div>
+          <Button size="sm" variant="primary" className="mt-3" onClick={saveInfo} disabled={anyBusy || !infoChanged || !name.trim() || Number(targetAmount) <= 0}>
+            {busy === "info" ? "Guardando..." : "Guardar información"}
+          </Button>
+        </section>
 
-          <div className="flex justify-end gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-            <button type="button" onClick={onClose}
-              className="cursor-pointer rounded-xl bg-zinc-100 px-6 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300">
-              Cancelar
-            </button>
-            <button type="submit" disabled={submitting}
-              className="cursor-pointer rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-2.5 text-sm font-medium text-white shadow-lg transition-all hover:shadow-xl disabled:opacity-50">
-              {submitting ? "Guardando..." : "Guardar cambios"}
-            </button>
+        <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            Agregar depósito
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+            <Field label="Cuenta origen">
+              {(props) => (
+                <Select
+                  {...props}
+                  value={depositAccountId}
+                  onChange={setDepositAccountId}
+                  placeholder="Selecciona una cuenta"
+                  options={nonCreditAccounts.map((a) => ({ value: a.id, label: a.name, hint: formatClp(a.balance) }))}
+                />
+              )}
+            </Field>
+            <Field label="Monto" className="sm:w-40">
+              {(props) => (
+                <MoneyInput {...props} value={depositAmount} onChange={setDepositAmount} />
+              )}
+            </Field>
           </div>
-        </form>
+          <Button size="sm" variant="primary" className="mt-3" onClick={addDeposit} disabled={anyBusy || !depositValid}>
+            {busy === "deposit" ? "Depositando..." : "Depositar"}
+          </Button>
+        </section>
+
+        <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            Depósito automático mensual
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+            <Field label="Cuenta origen">
+              {(props) => (
+                <Select
+                  {...props}
+                  value={autoAccountId}
+                  onChange={setAutoAccountId}
+                  placeholder="Selecciona una cuenta"
+                  options={nonCreditAccounts.map((a) => ({ value: a.id, label: a.name, hint: formatClp(a.balance) }))}
+                />
+              )}
+            </Field>
+            <Field label="Monto" className="sm:w-36">
+              {(props) => (
+                <MoneyInput {...props} value={autoAmount} onChange={setAutoAmount} />
+              )}
+            </Field>
+            <Field label="Día" className="sm:w-20">
+              {(props) => (
+                <input {...props} className={inputClass} inputMode="numeric" value={autoDay} onChange={(e) => setAutoDay(e.target.value.replace(/\D/g, "").slice(0, 2))} />
+              )}
+            </Field>
+          </div>
+          <Button size="sm" variant="primary" className="mt-3" onClick={addAutoDeposit} disabled={anyBusy || !autoValid}>
+            {busy === "auto" ? "Creando..." : "Crear depósito automático"}
+          </Button>
+        </section>
+      </FormBody>
+
+      <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-6 py-4 dark:border-zinc-800">
+        <Button variant="danger-ghost" onClick={deleteFund} disabled={anyBusy}>
+          {busy === "delete" ? "Eliminando..." : "Eliminar fondo"}
+        </Button>
+        <Button variant="ghost" onClick={onClose}>Cerrar</Button>
       </div>
-    </div>
+    </Modal>
   );
 }

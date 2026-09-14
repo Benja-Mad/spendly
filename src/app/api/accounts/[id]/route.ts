@@ -12,7 +12,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+      return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
     }
 
     const { id } = await context.params;
@@ -30,7 +30,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+      return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
     }
 
     const { id } = await context.params;
@@ -39,6 +39,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       bank?: string | null;
       statementDay?: number | null;
       paymentDueDay?: number | null;
+      last4?: string | null;
     };
 
     const account = await updateAccount({
@@ -48,6 +49,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       bank: body.bank,
       statementDay: body.statementDay,
       paymentDueDay: body.paymentDueDay,
+      last4: body.last4,
     });
 
     return NextResponse.json({ account });

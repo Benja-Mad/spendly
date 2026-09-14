@@ -11,7 +11,7 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+      return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
     }
 
     const { id } = await params;
@@ -43,7 +43,7 @@ export async function DELETE(
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+      return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
     }
 
     const { id } = await params;

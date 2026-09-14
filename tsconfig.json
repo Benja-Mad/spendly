@@ -20,7 +20,8 @@
     ],
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "types": ["node", "@cloudflare/workers-types"]
   },
   "include": [
     "next-env.d.ts",
@@ -30,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "scripts"]
+  "exclude": ["node_modules", "examples"]
 }

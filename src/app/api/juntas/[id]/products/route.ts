@@ -1,5 +1,16 @@
 import { NextResponse } from "next/server";
 import { getSupabaseRouteHandler } from "@/lib/supabase";
+import { readJsonBody } from "@/lib/http";
+
+type ProductBody = {
+  name: string;
+  categoryId: string | null;
+  assignedTo: string | null;
+  link: string | null;
+  imageUrl: string | null;
+  amount: number;
+  quantity: number;
+};
 
 export async function POST(
   request: Request,
@@ -9,7 +20,7 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
   const { id } = await params;
@@ -22,14 +33,14 @@ export async function POST(
     .single();
 
   if (!membership) {
-    return NextResponse.json({ error: "Not a member" }, { status: 403 });
+    return NextResponse.json({ error: "No eres miembro de esta junta." }, { status: 403 });
   }
 
-  const body = await request.json();
+  const body = await readJsonBody<ProductBody>(request);
   const { name, categoryId, assignedTo, link, imageUrl, amount, quantity } = body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    return NextResponse.json({ error: "El nombre es obligatorio." }, { status: 400 });
   }
 
   if (!amount || typeof amount !== "number" || amount <= 0) {
@@ -46,8 +57,8 @@ export async function POST(
       name: name.trim(),
       link: link || null,
       image_url: imageUrl || null,
-      amount: Math.round(amount),
-      quantity: quantity && quantity > 0 ? quantity : 1,
+      amount: Math.round(Number(amount)),
+      quantity: quantity && Number(quantity) > 0 ? Number(quantity) : 1,
     })
     .select()
     .single();
@@ -67,7 +78,7 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
   const { id } = await params;
@@ -86,10 +97,10 @@ export async function PATCH(
     .single();
 
   if (!product || product.user_id !== user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para hacer esto." }, { status: 403 });
   }
 
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const updates: Record<string, unknown> = {};
 
   if (body.name !== undefined) updates.name = body.name;
@@ -97,7 +108,7 @@ export async function PATCH(
   if (body.assignedTo !== undefined) updates.assigned_to = body.assignedTo || null;
   if (body.link !== undefined) updates.link = body.link;
   if (body.imageUrl !== undefined) updates.image_url = body.imageUrl;
-  if (body.amount !== undefined) updates.amount = Math.round(body.amount);
+  if (body.amount !== undefined) updates.amount = Math.round(Number(body.amount));
   if (body.quantity !== undefined) updates.quantity = body.quantity;
 
   const { data, error } = await supabase
@@ -122,7 +133,7 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
   const { id } = await params;
@@ -141,7 +152,7 @@ export async function DELETE(
     .single();
 
   if (!product || product.user_id !== user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para hacer esto." }, { status: 403 });
   }
 
   const { error } = await supabase

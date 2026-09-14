@@ -1,18 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
-import Link from "next/link";
+import { translateAuthError } from "@/lib/errors";
+import { notify } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
 
     try {
@@ -22,12 +23,12 @@ export function ForgotPasswordForm() {
       });
 
       if (resetError) {
-        throw new Error(resetError.message);
+        throw new Error(translateAuthError(resetError.message, "No se pudo enviar el correo."));
       }
 
       setSuccess(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al enviar correo");
+      notify.error(err, "No se pudo enviar el correo.");
     } finally {
       setLoading(false);
     }
@@ -85,11 +86,6 @@ export function ForgotPasswordForm() {
           <h2 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-white">¿Olvidaste tu contraseña?</h2>
           <p className="mb-4 text-sm text-zinc-500">Ingresa tu correo y te enviaremos un enlace para restablecerla.</p>
 
-          {error && (
-            <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-400">
-              {error}
-            </div>
-          )}
 
           <div className="space-y-4">
             <div>
@@ -99,6 +95,7 @@ export function ForgotPasswordForm() {
               <input
                 id="email"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -107,13 +104,9 @@ export function ForgotPasswordForm() {
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="cursor-pointer w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-2.5 text-sm font-medium text-white shadow-lg transition-all hover:shadow-xl disabled:opacity-50"
-            >
+            <Button type="submit" variant="primary" block disabled={loading}>
               {loading ? "Enviando..." : "Enviar enlace"}
-            </button>
+            </Button>
           </div>
         </form>
 
