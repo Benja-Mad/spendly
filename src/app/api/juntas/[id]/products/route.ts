@@ -47,7 +47,7 @@ export async function POST(
       link: link || null,
       image_url: imageUrl || null,
       amount: Math.round(amount),
-      quantity: quantity && quantity > 0 ? quantity : 1,
+      quantity: quantity && quantity > 0 ? parseFloat(quantity) : 1,
     })
     .select()
     .single();
@@ -80,13 +80,13 @@ export async function PATCH(
 
   const { data: product } = await supabase
     .from("junta_products")
-    .select("user_id")
+    .select("id")
     .eq("id", prodId)
     .eq("junta_id", id)
     .single();
 
-  if (!product || product.user_id !== user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!product) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const body = await request.json();
@@ -98,7 +98,13 @@ export async function PATCH(
   if (body.link !== undefined) updates.link = body.link;
   if (body.imageUrl !== undefined) updates.image_url = body.imageUrl;
   if (body.amount !== undefined) updates.amount = Math.round(body.amount);
-  if (body.quantity !== undefined) updates.quantity = body.quantity;
+  if (body.quantity !== undefined) {
+    const q = parseFloat(body.quantity);
+    if (isNaN(q) || q <= 0) {
+      return NextResponse.json({ error: "Quantity must be greater than 0" }, { status: 400 });
+    }
+    updates.quantity = q;
+  }
 
   const { data, error } = await supabase
     .from("junta_products")
@@ -135,13 +141,13 @@ export async function DELETE(
 
   const { data: product } = await supabase
     .from("junta_products")
-    .select("user_id")
+    .select("id")
     .eq("id", prodId)
     .eq("junta_id", id)
     .single();
 
-  if (!product || product.user_id !== user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!product) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const { error } = await supabase

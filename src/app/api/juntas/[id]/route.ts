@@ -96,9 +96,10 @@ export async function GET(
     toUser: profileMap.get(s.to_user_id) || null,
   }));
 
-  const memberMap = new Map(members.map((m) => [m.userId, m]));
   const balances = (membersRes.data || []).map((m) => {
-    const memberProducts = (productsRes.data || []).filter((p) => p.user_id === m.user_id);
+    const memberProducts = (productsRes.data || []).filter(
+      (p) => (p.assigned_to || p.user_id) === m.user_id
+    );
     const totalSpent = memberProducts.reduce((sum, p) => sum + p.amount * p.quantity, 0);
     return {
       userId: m.user_id,

@@ -378,7 +378,7 @@ function ProductRow({ product, onEdit, onDelete }: { product: JuntaProduct; onEd
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium text-zinc-900 dark:text-white truncate">{product.name}</span>
-          {product.quantity > 1 && (
+          {product.quantity !== 1 && (
             <span className="shrink-0 rounded-md bg-zinc-200 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400">
               x{product.quantity}
             </span>
@@ -392,7 +392,7 @@ function ProductRow({ product, onEdit, onDelete }: { product: JuntaProduct; onEd
       </div>
       <div className="shrink-0 text-right">
         <p className="font-semibold text-zinc-900 dark:text-white">{formatClp(product.amount * product.quantity)}</p>
-        {product.quantity > 1 && (
+        {product.quantity !== 1 && (
           <p className="text-xs text-zinc-500">{formatClp(product.amount)} c/u</p>
         )}
       </div>
@@ -460,7 +460,7 @@ function AddInlineProduct({
           categoryId,
           assignedTo: assignedTo || undefined,
           amount: parseInt(amount, 10),
-          quantity: parseInt(quantity, 10) || 1,
+          quantity: parseFloat(quantity) || 1,
           link: link || undefined,
         }),
       });
@@ -517,7 +517,8 @@ function AddInlineProduct({
             type="number"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            min="1"
+            min="0.01"
+            step="0.01"
             className="rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
             placeholder="Cant."
           />
@@ -686,7 +687,7 @@ function EditProductForm({
           categoryId: categoryId || null,
           assignedTo: assignedTo || null,
           amount: parseInt(amount, 10),
-          quantity: parseInt(quantity, 10) || 1,
+          quantity: parseFloat(quantity) || 1,
           link: link || null,
           imageUrl: imageUrl || null,
         }),
@@ -725,7 +726,8 @@ function EditProductForm({
             type="number"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            min="1"
+            min="0.01"
+            step="0.01"
             className="rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
             placeholder="Cant."
           />
@@ -812,7 +814,7 @@ function AddProductGlobalForm({
           categoryId: categoryId || undefined,
           assignedTo: assignedTo || undefined,
           amount: parseInt(amount, 10),
-          quantity: parseInt(quantity, 10) || 1,
+          quantity: parseFloat(quantity) || 1,
           link: link || undefined,
           imageUrl: imageUrl || undefined,
         }),
@@ -851,7 +853,8 @@ function AddProductGlobalForm({
             type="number"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            min="1"
+            min="0.01"
+            step="0.01"
             className="rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
             placeholder="Cant."
           />
