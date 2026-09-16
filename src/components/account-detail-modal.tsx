@@ -103,9 +103,9 @@ export function AccountDetailModal({
           cuenta, así que viven aquí. Antes estaban en el encabezado de la
           página, donde no se sabía a qué cuenta aplicaban.
         */}
-        <div className="mt-5 flex items-center justify-between gap-3">
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold text-zinc-900 dark:text-white">Movimientos</h3>
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             {account.kind === "credit" && canPay && account.creditDebt > 0 && (
               <Button size="sm" onClick={onPay}>Pagar tarjeta</Button>
             )}
@@ -117,7 +117,7 @@ export function AccountDetailModal({
 
         <div className="mt-4">
           <TransitionSwap
-            showSkeleton={isLoading && transactions.length === 0}
+            showSkeleton={isLoading && !data}
             skeleton={
               <div className="space-y-2">
                 {Array.from({ length: 3 }).map((_, i) => <TransactionRowSkeleton key={i} />)}

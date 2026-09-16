@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Account } from "@/lib/types";
 import { formatClp } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import { TiltHandlers, useTilt } from "@/components/ui/tilt";
 
 interface AccountCardProps {
@@ -147,3 +148,40 @@ const describe = (account: Account) =>
   account.last4
     ? `Ver detalle de ${account.name}, terminada en ${account.last4}`
     : `Ver detalle de ${account.name}`;
+
+/**
+ * Esqueleto de la tarjeta. No fija una altura: repite la misma caja (p-5, las
+ * mismas cuatro franjas con los mismos tamaños de texto) para que el alto salga
+ * del mismo cálculo que en la tarjeta real. Un `h-[...]` a ojo se desincroniza
+ * en cuanto la tarjeta cambia de contenido.
+ */
+export function AccountCardSkeleton({ credit = false }: { credit?: boolean }) {
+  return (
+    <div className="w-full rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-4 flex items-center justify-between">
+        <Skeleton className="h-6 w-20 rounded-full" />
+        <Skeleton className="h-4 w-24" />
+      </div>
+
+      {/* El número de tarjeta es text-lg: 28 px de línea. */}
+      <div className="mb-4 flex h-7 items-center">
+        <Skeleton className="h-5 w-52" />
+      </div>
+
+      <div className="mb-4 space-y-1">
+        <Skeleton className="h-3 w-14" />
+        <Skeleton className="h-4 w-32" />
+      </div>
+
+      <div className="flex items-end justify-between border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <div className="space-y-1">
+          <Skeleton className="h-3 w-12" />
+          <Skeleton className="h-5 w-24" />
+          {/* Las tarjetas de crédito llevan además la línea de fechas. */}
+          {credit && <Skeleton className="mt-1 h-3 w-36" />}
+        </div>
+        <Skeleton className="h-8 w-12" />
+      </div>
+    </div>
+  );
+}

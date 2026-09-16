@@ -10,6 +10,7 @@ import { useJunta } from "@/lib/swr";
 import { notify } from "@/lib/toast";
 import { collapseVariants, itemVariants, listVariants } from "@/lib/motion";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TransitionSwap } from "@/components/ui/transition-swap";
 import { JuntaProductForm } from "@/components/junta-product-form";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Modal } from "@/components/ui/modal";
@@ -55,19 +56,7 @@ export default function JuntaDetailPage() {
     }
   };
 
-  if (isLoading && !data) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-56" />
-        <Skeleton className="h-10 w-full rounded-xl" />
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-2xl" />)}
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) {
+  if (!isLoading && !data) {
     return (
       <div className="rounded-2xl bg-red-50 p-6 text-center dark:bg-red-950/30">
         <p className="text-sm text-red-700 dark:text-red-400">
@@ -77,7 +66,8 @@ export default function JuntaDetailPage() {
     );
   }
 
-  const { junta, members, categories, products, balances } = data;
+  const loading = isLoading && !data;
+  const junta = data?.junta;
 
   return (
     <div>
@@ -87,33 +77,49 @@ export default function JuntaDetailPage() {
         </svg>
         Volver a juntas
       </Link>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">{junta.name}</h1>
-        {junta.description && (
-          <p className="mt-1 text-sm text-zinc-500">{junta.description}</p>
-        )}
-        <div className="mt-3 flex items-center gap-3">
-          <Button
-            size="sm"
-            onClick={copyCode}
-            aria-label={copied ? "Código copiado" : "Copiar código de invitación"}
-            title="Copiar código de invitación"
-            className="font-mono"
-          >
-            <span>{junta.inviteCode}</span>
-            {copied ? (
-              <svg className="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
+      <TransitionSwap
+        showSkeleton={loading}
+        skeleton={
+          <div className="mb-6">
+            <Skeleton className="h-8 w-56" />
+            <Skeleton className="mt-2 h-4 w-72" />
+            <div className="mt-3 flex items-center gap-3">
+              <Skeleton className="h-8 w-28 rounded-xl" />
+              <Skeleton className="h-3 w-48" />
+            </div>
+          </div>
+        }
+      >
+        {junta && (
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">{junta.name}</h1>
+            {junta.description && (
+              <p className="mt-1 text-sm text-zinc-500">{junta.description}</p>
             )}
-          </Button>
-          <span className="text-xs text-zinc-400">Comparte este código para invitar</span>
-        </div>
-      </div>
+            <div className="mt-3 flex items-center gap-3">
+              <Button
+                size="sm"
+                onClick={copyCode}
+                aria-label={copied ? "Código copiado" : "Copiar código de invitación"}
+                title="Copiar código de invitación"
+                className="font-mono"
+              >
+                <span>{junta.inviteCode}</span>
+                {copied ? (
+                  <svg className="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                )}
+              </Button>
+              <span className="text-xs text-zinc-400">Comparte este código para invitar</span>
+            </div>
+          </div>
+        )}
+      </TransitionSwap>
 
       <div role="tablist" aria-label="Secciones de la junta" className="mb-6 flex gap-1 rounded-xl border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-900">
         {TABS.map(([key, label], index) => (
@@ -134,7 +140,7 @@ export default function JuntaDetailPage() {
               setTab(next);
               document.getElementById(`tab-${next}`)?.focus();
             }}
-            className={`flex-1 cursor-pointer rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+            className={`flex-1 cursor-pointer rounded-lg px-2 py-2 text-sm font-medium transition-all sm:px-4 ${
               tab === key
                 ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
                 : "text-zinc-600 hover:text-zinc-900 dark:hover:text-white dark:text-zinc-400"
@@ -145,23 +151,36 @@ export default function JuntaDetailPage() {
         ))}
       </div>
 
-      <div role="tabpanel" id="panel-productos" aria-labelledby="tab-productos" hidden={tab !== "productos"}>
-        <ProductosTab
-          categories={categories}
-          products={products}
-          members={members}
-          juntaId={id}
-          reload={load}
-        />
-      </div>
+      <TransitionSwap
+        showSkeleton={loading}
+        skeleton={
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-2xl" />)}
+          </div>
+        }
+      >
+        {data && (
+          <>
+            <div role="tabpanel" id="panel-productos" aria-labelledby="tab-productos" hidden={tab !== "productos"}>
+              <ProductosTab
+                categories={data.categories}
+                products={data.products}
+                members={data.members}
+                juntaId={id}
+                reload={load}
+              />
+            </div>
 
-      <div role="tabpanel" id="panel-balances" aria-labelledby="tab-balances" hidden={tab !== "balances"}>
-        <BalancesTab balances={balances} memberCount={members.length} />
-      </div>
+            <div role="tabpanel" id="panel-balances" aria-labelledby="tab-balances" hidden={tab !== "balances"}>
+              <BalancesTab balances={data.balances} memberCount={data.members.length} />
+            </div>
 
-      <div role="tabpanel" id="panel-miembros" aria-labelledby="tab-miembros" hidden={tab !== "miembros"}>
-        <MiembrosTab members={members} />
-      </div>
+            <div role="tabpanel" id="panel-miembros" aria-labelledby="tab-miembros" hidden={tab !== "miembros"}>
+              <MiembrosTab members={data.members} />
+            </div>
+          </>
+        )}
+      </TransitionSwap>
     </div>
   );
 }
@@ -244,16 +263,24 @@ function ProductosTab({
                 onClick={() => setExpandedCat(isExpanded ? null : cat.id)}
                 aria-expanded={isExpanded}
                 aria-controls={`cat-panel-${cat.id}`}
-                className="cursor-pointer flex flex-1 items-center justify-between gap-3 px-5 py-4 text-left"
+                /* min-w-0: sin él este flex-1 no bajaba de su ancho mínimo y
+                   empujaba el botón de eliminar fuera de la fila, que en
+                   pantalla de teléfono quedaba cortado por el borde. */
+                className="cursor-pointer flex min-w-0 flex-1 items-center justify-between gap-3 px-5 py-4 text-left"
               >
-                <div className="flex items-center gap-3">
-                  <h3 className="font-semibold text-zinc-900 dark:text-white">{cat.name}</h3>
-                  <span className="rounded-lg bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                <div className="flex min-w-0 items-center gap-3">
+                  <h3 className="truncate font-semibold text-zinc-900 dark:text-white">{cat.name}</h3>
+                  {/*
+                    En angosto desaparece: el recuento es dato secundario y el
+                    nombre de la categoría no. Con la píldora puesta, el título
+                    se quedaba con ~120 px y se truncaba; sin ella tiene el doble.
+                  */}
+                  <span className="hidden shrink-0 rounded-lg bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 sm:inline dark:bg-zinc-800 dark:text-zinc-400">
                     {catProducts.length} {catProducts.length === 1 ? "producto" : "productos"}
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-zinc-900 dark:text-white">{formatClp(catTotal)}</span>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="font-semibold tabular-nums text-zinc-900 dark:text-white">{formatClp(catTotal)}</span>
                   <svg
                     className={`h-5 w-5 text-zinc-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                     fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"
@@ -317,16 +344,16 @@ function ProductosTab({
           <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
             <button
               onClick={() => setExpandedCat(expandedCat === "none" ? null : "none")}
-              className="cursor-pointer flex w-full items-center justify-between px-5 py-4 text-left transition-all hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+              className="cursor-pointer flex w-full min-w-0 items-center justify-between gap-3 px-5 py-4 text-left transition-all hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
             >
-              <div className="flex items-center gap-3">
-                <h3 className="font-semibold text-zinc-900 dark:text-white">Sin categoría</h3>
-                <span className="rounded-lg bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                  {uncategorized.length} productos
+              <div className="flex min-w-0 items-center gap-3">
+                <h3 className="truncate font-semibold text-zinc-900 dark:text-white">Sin categoría</h3>
+                <span className="hidden shrink-0 rounded-lg bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 sm:inline dark:bg-zinc-800 dark:text-zinc-400">
+                  {uncategorized.length} {uncategorized.length === 1 ? "producto" : "productos"}
                 </span>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="font-semibold text-zinc-900 dark:text-white">
+              <div className="flex shrink-0 items-center gap-3">
+                <span className="font-semibold tabular-nums text-zinc-900 dark:text-white">
                   {formatClp(uncategorized.reduce((s, p) => s + p.amount * p.quantity, 0))}
                 </span>
                 <svg

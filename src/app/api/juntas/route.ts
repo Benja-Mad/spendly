@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseRouteHandler } from "@/lib/supabase";
 import { readJsonBody } from "@/lib/http";
+import { mapJunta } from "@/lib/juntas";
+import { RowRecord } from "@/lib/types";
 
 export async function GET() {
   const supabase = await getSupabaseRouteHandler();
@@ -35,7 +37,7 @@ export async function GET() {
     return NextResponse.json({ error: juntasError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ juntas });
+  return NextResponse.json({ juntas: (juntas ?? []).map((j) => mapJunta(j as RowRecord)) });
 }
 
 export async function POST(request: Request) {

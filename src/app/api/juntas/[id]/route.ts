@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin, getSupabaseRouteHandler } from "@/lib/supabase";
 import { readJsonBody } from "@/lib/http";
+import { mapJunta } from "@/lib/juntas";
+import { RowRecord } from "@/lib/types";
 
 export async function GET(
   _request: Request,
@@ -127,15 +129,7 @@ export async function GET(
   }));
 
   return NextResponse.json({
-    junta: {
-      id: juntaRes.data.id,
-      name: juntaRes.data.name,
-      description: juntaRes.data.description,
-      inviteCode: juntaRes.data.invite_code,
-      ownerId: juntaRes.data.owner_id,
-      isClosed: juntaRes.data.is_closed,
-      createdAt: juntaRes.data.created_at,
-    },
+    junta: mapJunta(juntaRes.data as RowRecord),
     members,
     categories: (categoriesRes.data || []).map((c) => ({
       id: c.id,
@@ -189,7 +183,7 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ junta: data });
+  return NextResponse.json({ junta: mapJunta(data as RowRecord) });
 }
 
 export async function DELETE(

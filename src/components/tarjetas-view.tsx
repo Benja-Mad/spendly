@@ -7,13 +7,14 @@ import { formatClp } from "@/lib/utils";
 import { errorMessage } from "@/lib/errors";
 import { useDashboard } from "@/lib/swr";
 import { itemVariants, listVariants } from "@/lib/motion";
-import { AccountCard } from "@/components/account-card";
+import { AccountCard, AccountCardSkeleton } from "@/components/account-card";
 import { AccountDetailModal } from "@/components/account-detail-modal";
 import { CreateAccountModal } from "@/components/create-account-modal";
 import { PayCreditModal } from "@/components/pay-credit-modal";
-import { PageHeader } from "@/components/ui/page-header";
+import { PageHeader, SectionHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
-import { CardSkeleton, Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TransitionSwap } from "@/components/ui/transition-swap";
 
 export function TarjetasView() {
   const { data, error, isLoading, mutate } = useDashboard();
@@ -22,21 +23,7 @@ export function TarjetasView() {
   const [payingCard, setPayingCard] = useState<Account | null>(null);
   const [selected, setSelected] = useState<Account | null>(null);
 
-  if (isLoading && !data) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-56" />
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)}
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-2xl" />)}
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) {
+  if (!isLoading && !data) {
     return (
       <div className="py-10 text-center">
         <p className="text-zinc-500">No se pudo cargar la información.</p>
@@ -48,9 +35,11 @@ export function TarjetasView() {
     );
   }
 
-  const creditAccounts = data.accounts.filter((a) => a.kind === "credit");
-  const nonCreditAccounts = data.accounts.filter((a) => a.kind !== "credit");
-  const hasAccounts = data.accounts.length > 0;
+  const loading = isLoading && !data;
+  const accounts = data?.accounts ?? [];
+  const creditAccounts = accounts.filter((a) => a.kind === "credit");
+  const nonCreditAccounts = accounts.filter((a) => a.kind !== "credit");
+  const hasAccounts = accounts.length > 0;
 
   return (
     <div className="space-y-8">
@@ -62,14 +51,19 @@ export function TarjetasView() {
       */}
       <PageHeader title="Tarjetas y cuentas" description="Tus cuentas, tarjetas de crédito y saldos" />
 
+      {/*
+        Los rótulos son fijos, así que se pintan de entrada; lo único que espera
+        es la cifra. Antes toda la fila era un esqueleto y "Total disponible"
+        tardaba lo mismo que el monto en aparecer.
+      */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryTile label="Total disponible" value={formatClp(data.summary.available)} />
-        <SummaryTile label="Total ahorrado" value={formatClp(data.summary.saved)} tone="emerald" />
-        <SummaryTile label="Deuda crédito" value={formatClp(data.summary.pendingCreditDebt)} tone="red" />
-        <SummaryTile label="Total general" value={formatClp(data.summary.total)} />
+        <SummaryTile label="Total disponible" value={data && formatClp(data.summary.available)} />
+        <SummaryTile label="Total ahorrado" value={data && formatClp(data.summary.saved)} tone="emerald" />
+        <SummaryTile label="Deuda crédito" value={data && formatClp(data.summary.pendingCreditDebt)} tone="red" />
+        <SummaryTile label="Total general" value={data && formatClp(data.summary.total)} />
       </div>
 
-      {!hasAccounts && (
+      {!loading && !hasAccounts && (
         <div className="rounded-2xl border border-dashed border-zinc-300 py-16 text-center dark:border-zinc-700">
           <svg aria-hidden="true" className="mx-auto h-12 w-12 text-zinc-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
             <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
@@ -84,43 +78,65 @@ export function TarjetasView() {
         </div>
       )}
 
-      {hasAccounts && (
+      {(loading || hasAccounts) && (
         <section>
           <SectionHeader
             title="Tarjetas de crédito"
             action={<Button size="sm" onClick={() => setCreating("credit")}>+ Tarjeta</Button>}
           />
-          {creditAccounts.length === 0 ? (
-            <EmptySection text="No tienes tarjetas de crédito registradas." />
-          ) : (
-            <motion.div variants={listVariants} initial="hidden" animate="visible" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {creditAccounts.map((account) => (
-                <motion.div key={account.id} variants={itemVariants} className="flex">
-                  <AccountCard account={account} onSelect={() => setSelected(account)} />
-                </motion.div>
-              ))}
-            </motion.div>
-          )}
+          <TransitionSwap
+            showSkeleton={loading}
+            skeleton={
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <AccountCardSkeleton key={i} credit={true} />
+                ))}
+              </div>
+            }
+          >
+            {creditAccounts.length === 0 ? (
+              <EmptySection text="No tienes tarjetas de crédito registradas." />
+            ) : (
+              <motion.div variants={listVariants} initial="hidden" animate="visible" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {creditAccounts.map((account) => (
+                  <motion.div key={account.id} variants={itemVariants} className="flex">
+                    <AccountCard account={account} onSelect={() => setSelected(account)} />
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
+          </TransitionSwap>
         </section>
       )}
 
-      {hasAccounts && (
+      {(loading || hasAccounts) && (
         <section>
           <SectionHeader
             title="Cuentas"
             action={<Button size="sm" onClick={() => setCreating("debit")}>+ Cuenta</Button>}
           />
-          {nonCreditAccounts.length === 0 ? (
-            <EmptySection text="No tienes cuentas de débito, corriente ni efectivo." />
-          ) : (
-            <motion.div variants={listVariants} initial="hidden" animate="visible" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {nonCreditAccounts.map((account) => (
-                <motion.div key={account.id} variants={itemVariants} className="flex">
-                  <AccountCard account={account} onSelect={() => setSelected(account)} />
-                </motion.div>
-              ))}
-            </motion.div>
-          )}
+          <TransitionSwap
+            showSkeleton={loading}
+            skeleton={
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <AccountCardSkeleton key={i} credit={false} />
+                ))}
+              </div>
+            }
+          >
+            {nonCreditAccounts.length === 0 ? (
+              <EmptySection text="No tienes cuentas de débito, corriente ni efectivo." />
+            ) : (
+              <motion.div variants={listVariants} initial="hidden" animate="visible" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {nonCreditAccounts.map((account) => (
+                  <motion.div key={account.id} variants={itemVariants} className="flex">
+                    <AccountCard account={account} onSelect={() => setSelected(account)} />
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
+          </TransitionSwap>
         </section>
       )}
 
@@ -137,7 +153,7 @@ export function TarjetasView() {
             onClose={() => setPayingCard(null)}
           />
         )}
-        {selected && (
+        {selected && data && (
           <AccountDetailModal
             key="account-detail"
             account={data.accounts.find((a) => a.id === selected.id) ?? selected}
@@ -153,15 +169,6 @@ export function TarjetasView() {
   );
 }
 
-function SectionHeader({ title, action }: { title: string; action: React.ReactNode }) {
-  return (
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">{title}</h2>
-      {action}
-    </div>
-  );
-}
-
 function EmptySection({ text }: { text: string }) {
   return (
     <p className="rounded-2xl border border-dashed border-zinc-200 py-8 text-center text-sm text-zinc-400 dark:border-zinc-800">
@@ -170,7 +177,16 @@ function EmptySection({ text }: { text: string }) {
   );
 }
 
-function SummaryTile({ label, value, tone }: { label: string; value: string; tone?: "emerald" | "red" }) {
+function SummaryTile({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  /** undefined mientras el dato no llega: el rótulo ya se ve, la cifra no. */
+  value: string | undefined | false;
+  tone?: "emerald" | "red";
+}) {
   const toneClass =
     tone === "emerald"
       ? "text-emerald-600 dark:text-emerald-400"
@@ -181,7 +197,14 @@ function SummaryTile({ label, value, tone }: { label: string; value: string; ton
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <p className="text-xs text-zinc-500">{label}</p>
-      <p className={`text-lg font-bold tabular-nums ${toneClass}`}>{value}</p>
+      {/* text-lg son 28 px de línea: el hueco mide lo mismo con dato o sin él. */}
+      <div className="flex h-7 items-center">
+        {value ? (
+          <p className={`text-lg font-bold tabular-nums ${toneClass}`}>{value}</p>
+        ) : (
+          <Skeleton className="h-5 w-28" />
+        )}
+      </div>
     </div>
   );
 }

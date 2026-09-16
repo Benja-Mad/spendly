@@ -87,7 +87,7 @@ export function DashboardView() {
         métricas de apoyo. Antes eran cuatro bloques con gradientes saturados
         del mismo tamaño, compitiendo entre sí sin decir cuál importa.
       */}
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-[1.4fr_1fr]">
         <TransitionSwap showSkeleton={loading} skeleton={<Skeleton className="h-[132px] rounded-2xl" />}>
           <div className="h-[132px] rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-6 text-white">
             <p className="text-sm font-medium text-white/80">Disponible</p>
@@ -99,8 +99,11 @@ export function DashboardView() {
         <TransitionSwap
           showSkeleton={loading}
           skeleton={
+            /* Sin altura propia: las tres filas las reparte la misma grilla
+               h-[132px] que usa el contenido real. Con h-[41px] sumaban 139 px
+               y no calzaban. */
             <div className="grid h-[132px] gap-2">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[41px] rounded-xl" />)}
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="rounded-xl" />)}
             </div>
           }
         >
@@ -112,7 +115,7 @@ export function DashboardView() {
         </TransitionSwap>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-[1.4fr_1fr]">
         <Panel
           title="Últimos movimientos"
           action={
@@ -239,7 +242,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <section className="min-w-0 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mb-4 flex h-8 items-center justify-between gap-3">
         <h2 className="font-semibold text-zinc-900 dark:text-white">{title}</h2>
         {action}

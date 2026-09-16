@@ -115,7 +115,13 @@ export function TransitionSwap({
        */
       style={{ overflow: animating && swapping ? "hidden" : "visible" }}
     >
-      <div ref={layersRef} className="grid [&>*]:col-start-1 [&>*]:row-start-1">
+      {/*
+        [&>*]:min-w-0 — un hijo de grilla trae min-width:auto y no baja del
+        ancho mínimo de su contenido. Sin esto, una fila ancha empujaba esta
+        capa por encima del ancho del panel y la página entera se desplazaba de
+        lado en pantallas de teléfono.
+      */}
+      <div ref={layersRef} className="grid min-w-0 [&>*]:col-start-1 [&>*]:row-start-1 [&>*]:min-w-0">
         <AnimatePresence initial={false}>
           {showSkeleton ? (
             <motion.div

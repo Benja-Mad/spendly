@@ -25,14 +25,17 @@ export function TransactionRow({
 }) {
   const income = isIncomeType(tx.type);
   const editable = Boolean(onEdit && onDelete);
+  const montoColor = income
+    ? "text-emerald-600 dark:text-emerald-400"
+    : "text-zinc-900 dark:text-white";
 
   return (
     <div
-      className={`group flex ${ROW_HEIGHT} items-center gap-3 rounded-xl border border-zinc-100 px-3 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/40`}
+      className={`group flex ${ROW_HEIGHT} min-w-0 items-center gap-2 rounded-xl border border-zinc-100 px-2.5 transition-colors hover:bg-zinc-50 sm:gap-3 sm:px-3 dark:border-zinc-800 dark:hover:bg-zinc-800/40`}
     >
       <span
         aria-hidden="true"
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 ${
           income
             ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400"
             : "bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-400"
@@ -43,27 +46,56 @@ export function TransactionRow({
         </svg>
       </span>
 
-      <div className="min-w-0 flex-1">
+      {/*
+        overflow-hidden aquí, no solo en los <p>: un hijo flex no baja de su
+        ancho mínimo de contenido a menos que él mismo recorte. Sin esto la
+        línea "Ingreso · 12 sept 2026" (que truncate deja en una sola línea)
+        fijaba un mínimo de 131 px, la fila no podía encogerse y en pantallas de
+        teléfono la página entera se desplazaba de lado.
+      */}
+      <div className="min-w-0 flex-1 overflow-hidden">
         <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">
           {tx.description ?? "Sin descripción"}
         </p>
-        <p className="truncate text-xs text-zinc-500">
-          {TX_TYPE_LABELS[tx.type] ?? tx.type} · {formatDate(tx.occurredAt)}
-        </p>
+        {/*
+          En pantalla angosta la palabra "Ingreso"/"Gasto" se omite: la flecha
+          de la izquierda, verde hacia arriba o roja hacia abajo, ya lo dice. Es
+          espacio gastado en repetir algo que se ve, y con él la fecha cabía
+          entera en vez de quedar en "12 ...".
+        */}
+        {/*
+          En angosto el monto baja a esta segunda línea. Como columna propia se
+          llevaba 76 px fijos que, junto a los 72 de las acciones, dejaban la
+          descripción en "C..". Aquí la descripción se queda con toda la primera
+          línea y el monto sigue alineado a la derecha.
+        */}
+        <div className="flex items-baseline justify-between gap-1.5">
+          <p className="truncate text-xs text-zinc-500">
+            <span className="hidden sm:inline">{TX_TYPE_LABELS[tx.type] ?? tx.type} · </span>
+            {formatDate(tx.occurredAt)}
+          </p>
+          <p className={`shrink-0 text-sm font-semibold tabular-nums sm:hidden ${montoColor}`}>
+            {income ? "+" : "−"}{formatClp(tx.amount)}
+          </p>
+        </div>
       </div>
 
-      <p
-        className={`shrink-0 text-sm font-semibold tabular-nums ${
-          income ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-900 dark:text-white"
-        }`}
-      >
+      <p className={`hidden shrink-0 text-sm font-semibold tabular-nums sm:block ${montoColor}`}>
         {income ? "+" : "−"}{formatClp(tx.amount)}
       </p>
 
-      {/* Ancho reservado siempre: aparecer no debe mover nada de sitio. */}
+      {/*
+        Ancho reservado siempre: aparecer no debe mover nada de sitio.
+
+        Y visibles por defecto: donde no hay cursor no hay hover que las revele,
+        así que en un teléfono editar o borrar un movimiento era imposible. Solo
+        donde SÍ hay cursor se esconden hasta el hover.
+      */}
       <div
         className={`flex w-[72px] shrink-0 items-center justify-end gap-1 transition-opacity ${
-          editable ? "opacity-0 group-hover:opacity-100 focus-within:opacity-100" : "opacity-0"
+          editable
+            ? "opacity-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-within:opacity-100"
+            : "opacity-0"
         }`}
       >
         {editable && (
@@ -88,13 +120,16 @@ export function TransactionRow({
 /** Esqueleto con exactamente la misma altura y estructura que la fila real. */
 export function TransactionRowSkeleton() {
   return (
-    <div className={`flex ${ROW_HEIGHT} items-center gap-3 rounded-xl border border-zinc-100 px-3 dark:border-zinc-800`}>
-      <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-zinc-200/70 dark:bg-zinc-800" />
+    <div className={`flex ${ROW_HEIGHT} min-w-0 items-center gap-2 rounded-xl border border-zinc-100 px-2.5 sm:gap-3 sm:px-3 dark:border-zinc-800`}>
+      <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-zinc-200/70 sm:h-9 sm:w-9 dark:bg-zinc-800" />
       <div className="min-w-0 flex-1 space-y-1.5">
         <div className="h-4 w-2/5 animate-pulse rounded bg-zinc-200/70 dark:bg-zinc-800" />
-        <div className="h-3 w-3/5 animate-pulse rounded bg-zinc-200/70 dark:bg-zinc-800" />
+        <div className="flex items-center justify-between gap-2">
+          <div className="h-3 w-3/5 animate-pulse rounded bg-zinc-200/70 dark:bg-zinc-800" />
+          <div className="h-4 w-20 shrink-0 animate-pulse rounded bg-zinc-200/70 dark:bg-zinc-800 sm:hidden" />
+        </div>
       </div>
-      <div className="h-4 w-20 shrink-0 animate-pulse rounded bg-zinc-200/70 dark:bg-zinc-800" />
+      <div className="hidden h-4 w-20 shrink-0 animate-pulse rounded bg-zinc-200/70 dark:bg-zinc-800 sm:block" />
       <div className="w-[72px] shrink-0" />
     </div>
   );
