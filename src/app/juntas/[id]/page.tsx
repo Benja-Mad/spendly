@@ -472,7 +472,7 @@ function ProductRow({ product, onEdit, onDelete }: { product: JuntaProduct; onEd
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium text-zinc-900 dark:text-white truncate">{product.name}</span>
-          {product.quantity > 1 && (
+          {product.quantity !== 1 && (
             <span className="shrink-0 rounded-md bg-zinc-200 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400">
               x{product.quantity}
             </span>
@@ -486,7 +486,7 @@ function ProductRow({ product, onEdit, onDelete }: { product: JuntaProduct; onEd
       </div>
       <div className="shrink-0 text-right">
         <p className="font-semibold text-zinc-900 dark:text-white">{formatClp(product.amount * product.quantity)}</p>
-        {product.quantity > 1 && (
+        {product.quantity !== 1 && (
           <p className="text-xs text-zinc-500">{formatClp(product.amount)} c/u</p>
         )}
       </div>

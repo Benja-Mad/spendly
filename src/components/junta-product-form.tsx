@@ -56,7 +56,7 @@ export function JuntaProductForm({
       categoryId: (lockedCategoryId ?? categoryId) || null,
       assignedTo: assignedTo || null,
       amount: parseInt(amount, 10),
-      quantity: parseInt(quantity, 10) || 1,
+      quantity: Number(quantity) || 1,
       link: link.trim() || null,
       imageUrl: imageUrl.trim() || null,
     };
@@ -106,9 +106,19 @@ export function JuntaProductForm({
               <input
                 {...props}
                 className={inputClass}
-                inputMode="numeric"
+                inputMode="decimal"
                 value={quantity}
-                onChange={(e) => setQuantity(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                /* Acepta decimales (medio kilo de carne, 1,5 litros): una coma
+                   o un punto, y un solo separador. Antes el filtro borraba
+                   cualquier cosa que no fuera dígito y "0.5" quedaba en "05". */
+                onChange={(e) => {
+                  const limpio = e.target.value
+                    .replace(",", ".")
+                    .replace(/[^\d.]/g, "")
+                    .replace(/(\..*)\./g, "$1")
+                    .slice(0, 6);
+                  setQuantity(limpio);
+                }}
                 placeholder="1"
               />
             )}

@@ -69,11 +69,11 @@ export async function GET(
   }
 
   const debtors = balances
-    .filter((b) => b.net < -0.5)
+    .filter((b) => b.net < 0)
     .sort((a, b) => a.net - b.net);
 
   const creditors = balances
-    .filter((b) => b.net > 0.5)
+    .filter((b) => b.net > 0)
     .sort((a, b) => b.net - a.net);
 
   const transfers: { from: string; to: string; amount: number }[] = [];
@@ -87,19 +87,19 @@ export async function GET(
   while (i < debtCopy.length && j < creditCopy.length) {
     const amount = Math.min(debtCopy[i].net, creditCopy[j].net);
 
-    if (amount > 0.5) {
+    if (amount > 0) {
       transfers.push({
         from: debtCopy[i].userId,
         to: creditCopy[j].userId,
-        amount: Math.round(amount),
+        amount: Math.round(amount * 100) / 100,
       });
     }
 
     debtCopy[i].net -= amount;
     creditCopy[j].net -= amount;
 
-    if (debtCopy[i].net < 0.5) i++;
-    if (creditCopy[j].net < 0.5) j++;
+    if (debtCopy[i].net <= 0) i++;
+    if (creditCopy[j].net <= 0) j++;
   }
 
   return NextResponse.json({

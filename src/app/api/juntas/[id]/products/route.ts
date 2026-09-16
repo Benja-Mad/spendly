@@ -58,6 +58,8 @@ export async function POST(
       link: link || null,
       image_url: imageUrl || null,
       amount: Math.round(Number(amount)),
+      // Number() acepta decimales igual que parseFloat y además tolera que el
+      // cuerpo llegue sin tipar.
       quantity: quantity && Number(quantity) > 0 ? Number(quantity) : 1,
     })
     .select()
@@ -91,13 +93,31 @@ export async function PATCH(
 
   const { data: product } = await supabase
     .from("junta_products")
-    .select("user_id")
+    .select("id")
     .eq("id", prodId)
     .eq("junta_id", id)
     .single();
 
-  if (!product || product.user_id !== user.id) {
-    return NextResponse.json({ error: "No tienes permiso para hacer esto." }, { status: 403 });
+  /*
+   * Cualquier MIEMBRO puede editar o borrar, no solo quien lo creó (decisión de
+   * 18c871c). Pero ese commit quitaba la comprobación de propiedad sin poner
+   * nada en su lugar, y PATCH/DELETE nunca verificaron membresía: la propiedad
+   * era la única autorización que había. Sin esto, cualquier usuario con sesión
+   * podría editar productos de una junta a la que no pertenece.
+   */
+  const { data: membership } = await supabase
+    .from("junta_members")
+    .select("id")
+    .eq("junta_id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!membership) {
+    return NextResponse.json({ error: "No eres miembro de esta junta." }, { status: 403 });
+  }
+
+  if (!product) {
+    return NextResponse.json({ error: "Producto no encontrado." }, { status: 404 });
   }
 
   const body = await readJsonBody(request);
@@ -109,7 +129,13 @@ export async function PATCH(
   if (body.link !== undefined) updates.link = body.link;
   if (body.imageUrl !== undefined) updates.image_url = body.imageUrl;
   if (body.amount !== undefined) updates.amount = Math.round(Number(body.amount));
-  if (body.quantity !== undefined) updates.quantity = body.quantity;
+  if (body.quantity !== undefined) {
+    const q = Number(body.quantity);
+    if (!Number.isFinite(q) || q <= 0) {
+      return NextResponse.json({ error: "La cantidad debe ser mayor que 0." }, { status: 400 });
+    }
+    updates.quantity = q;
+  }
 
   const { data, error } = await supabase
     .from("junta_products")
@@ -146,13 +172,31 @@ export async function DELETE(
 
   const { data: product } = await supabase
     .from("junta_products")
-    .select("user_id")
+    .select("id")
     .eq("id", prodId)
     .eq("junta_id", id)
     .single();
 
-  if (!product || product.user_id !== user.id) {
-    return NextResponse.json({ error: "No tienes permiso para hacer esto." }, { status: 403 });
+  /*
+   * Cualquier MIEMBRO puede editar o borrar, no solo quien lo creó (decisión de
+   * 18c871c). Pero ese commit quitaba la comprobación de propiedad sin poner
+   * nada en su lugar, y PATCH/DELETE nunca verificaron membresía: la propiedad
+   * era la única autorización que había. Sin esto, cualquier usuario con sesión
+   * podría editar productos de una junta a la que no pertenece.
+   */
+  const { data: membership } = await supabase
+    .from("junta_members")
+    .select("id")
+    .eq("junta_id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!membership) {
+    return NextResponse.json({ error: "No eres miembro de esta junta." }, { status: 403 });
+  }
+
+  if (!product) {
+    return NextResponse.json({ error: "Producto no encontrado." }, { status: 404 });
   }
 
   const { error } = await supabase
