@@ -105,6 +105,7 @@ export async function PATCH(
     }
     updates.quantity = q;
   }
+  if (body.hidden !== undefined) updates.hidden = body.hidden;
 
   const { data, error } = await supabase
     .from("junta_products")

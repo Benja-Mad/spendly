@@ -32,8 +32,9 @@ export async function GET(
 
   const { data: products } = await supabase
     .from("junta_products")
-    .select("user_id, assigned_to, amount, quantity")
-    .eq("junta_id", id);
+    .select("user_id, assigned_to, amount, quantity, hidden")
+    .eq("junta_id", id)
+    .eq("hidden", false);
 
   if (!members || !products) {
     return NextResponse.json({ error: "Failed to load data" }, { status: 500 });

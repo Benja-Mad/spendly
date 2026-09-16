@@ -78,6 +78,7 @@ export async function GET(
     imageUrl: p.image_url || null,
     amount: p.amount,
     quantity: p.quantity,
+    hidden: p.hidden ?? false,
     createdAt: p.created_at,
     user: profileMap.get(p.user_id) || null,
     assignedUser: p.assigned_to ? profileMap.get(p.assigned_to) || null : null,
@@ -98,7 +99,7 @@ export async function GET(
 
   const balances = (membersRes.data || []).map((m) => {
     const memberProducts = (productsRes.data || []).filter(
-      (p) => (p.assigned_to || p.user_id) === m.user_id
+      (p) => !p.hidden && (p.assigned_to || p.user_id) === m.user_id
     );
     const totalSpent = memberProducts.reduce((sum, p) => sum + p.amount * p.quantity, 0);
     return {

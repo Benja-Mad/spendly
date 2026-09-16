@@ -161,6 +161,7 @@ export interface JuntaProduct {
   imageUrl: string | null;
   amount: number;
   quantity: number;
+  hidden: boolean;
   createdAt: string;
   category?: JuntaCategory;
   user?: Profile;

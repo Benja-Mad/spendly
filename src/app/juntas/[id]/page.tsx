@@ -118,7 +118,7 @@ export default function JuntaDetailPage() {
       )}
 
       {tab === "balances" && (
-        <BalancesTab balances={balances} totalPool={products.reduce((s, p) => s + p.amount * p.quantity, 0)} />
+        <BalancesTab balances={balances} totalPool={products.filter((p) => !p.hidden).reduce((s, p) => s + p.amount * p.quantity, 0)} />
       )}
 
       {tab === "miembros" && (
@@ -188,12 +188,24 @@ function ProductosTab({
     }
   };
 
+  const handleToggleHide = async (prodId: string, currentHidden: boolean) => {
+    try {
+      await requestJson(`/api/juntas/${juntaId}/products?prodId=${prodId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ hidden: !currentHidden }),
+      });
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al ocultar producto");
+    }
+  };
+
   const getCategoryTotal = (catId: string) =>
     products
-      .filter((p) => p.categoryId === catId)
+      .filter((p) => p.categoryId === catId && !p.hidden)
       .reduce((sum, p) => sum + p.amount * p.quantity, 0);
 
-  const totalAll = products.reduce((s, p) => s + p.amount * p.quantity, 0);
+  const totalAll = products.filter((p) => !p.hidden).reduce((s, p) => s + p.amount * p.quantity, 0);
 
   return (
     <div className="space-y-3">
@@ -302,7 +314,7 @@ function ProductosTab({
                 ) : (
                   <div className="space-y-2 pt-3">
                     {catProducts.map((product) => (
-                      <ProductRow key={product.id} product={product} onEdit={() => { setEditingProduct(product); setShowGlobalAdd(false); }} onDelete={() => handleDeleteProduct(product.id)} />
+                      <ProductRow key={product.id} product={product} onEdit={() => { setEditingProduct(product); setShowGlobalAdd(false); }} onDelete={() => handleDeleteProduct(product.id)} onToggleHide={() => handleToggleHide(product.id, product.hidden)} />
                     ))}
                   </div>
                 )}
@@ -321,6 +333,7 @@ function ProductosTab({
 
       {(() => {
         const uncategorized = products.filter((p) => !p.categoryId);
+        const visibleUncategorized = uncategorized.filter((p) => !p.hidden);
         if (uncategorized.length === 0) return null;
         return (
           <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -336,7 +349,7 @@ function ProductosTab({
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-semibold text-zinc-900 dark:text-white">
-                  {formatClp(uncategorized.reduce((s, p) => s + p.amount * p.quantity, 0))}
+                  {formatClp(visibleUncategorized.reduce((s, p) => s + p.amount * p.quantity, 0))}
                 </span>
                 <svg
                   className={`h-5 w-5 text-zinc-400 transition-transform ${expandedCat === "none" ? "rotate-180" : ""}`}
@@ -350,7 +363,7 @@ function ProductosTab({
               <div className="border-t border-zinc-100 px-5 pb-4 dark:border-zinc-800">
                 <div className="space-y-2 pt-3">
                   {uncategorized.map((product) => (
-                    <ProductRow key={product.id} product={product} onEdit={() => { setEditingProduct(product); setShowGlobalAdd(false); }} onDelete={() => handleDeleteProduct(product.id)} />
+                    <ProductRow key={product.id} product={product} onEdit={() => { setEditingProduct(product); setShowGlobalAdd(false); }} onDelete={() => handleDeleteProduct(product.id)} onToggleHide={() => handleToggleHide(product.id, product.hidden)} />
                   ))}
                 </div>
               </div>
@@ -369,9 +382,9 @@ function ProductosTab({
   );
 }
 
-function ProductRow({ product, onEdit, onDelete }: { product: JuntaProduct; onEdit: () => void; onDelete: () => void }) {
+function ProductRow({ product, onEdit, onDelete, onToggleHide }: { product: JuntaProduct; onEdit: () => void; onDelete: () => void; onToggleHide: () => void }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800/50">
+    <div className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all ${product.hidden ? "bg-zinc-100 opacity-50 dark:bg-zinc-800/30" : "bg-zinc-50 dark:bg-zinc-800/50"}`}>
       {product.imageUrl && (
         <img src={product.imageUrl} alt={product.name} className="h-10 w-10 rounded-lg object-cover" />
       )}
@@ -396,6 +409,22 @@ function ProductRow({ product, onEdit, onDelete }: { product: JuntaProduct; onEd
           <p className="text-xs text-zinc-500">{formatClp(product.amount)} c/u</p>
         )}
       </div>
+      <button
+        onClick={onToggleHide}
+        className="shrink-0 cursor-pointer rounded-lg p-1.5 text-zinc-400 transition-all hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+        title={product.hidden ? "Mostrar producto" : "Ocultar producto"}
+      >
+        {product.hidden ? (
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+          </svg>
+        ) : (
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+        )}
+      </button>
       <button
         onClick={onEdit}
         className="shrink-0 cursor-pointer rounded-lg p-1.5 text-zinc-400 transition-all hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
