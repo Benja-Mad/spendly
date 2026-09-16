@@ -32,7 +32,22 @@ const mapAccount = (row: RowRecord): Account => ({
   creditDebt: Number(row.credit_debt),
   statementDay: (row.statement_day as number | null) ?? null,
   paymentDueDay: (row.payment_due_day as number | null) ?? null,
+  last4: (row.last4 as string | null) ?? null,
 });
+
+/**
+ * Normaliza los últimos 4 dígitos. Vacío es un valor válido: el campo es
+ * opcional y borrarlo tiene que poder hacerse.
+ */
+const normalizeLast4 = (value: string | null | undefined): string | null => {
+  if (value === null || value === undefined) return null;
+  const digits = value.trim();
+  if (!digits) return null;
+  if (!/^\d{4}$/.test(digits)) {
+    throw new Error("Los últimos 4 dígitos deben ser exactamente 4 números.");
+  }
+  return digits;
+};
 
 const mapCategory = (row: RowRecord): Category => ({
   id: String(row.id),
@@ -305,6 +320,7 @@ export const createAccount = async (payload: {
   initialBalance?: number;
   statementDay?: number | null;
   paymentDueDay?: number | null;
+  last4?: string | null;
 }) => {
   const supabase = getSupabaseAdmin();
 
@@ -334,6 +350,7 @@ export const createAccount = async (payload: {
     credit_debt: payload.kind === "credit" ? initialBalance : 0,
     statement_day: payload.kind === "credit" ? (payload.statementDay ?? null) : null,
     payment_due_day: payload.kind === "credit" ? (payload.paymentDueDay ?? null) : null,
+    last4: normalizeLast4(payload.last4),
   };
 
   const { error } = await supabase.from("accounts").insert(dataToInsert);
@@ -1122,6 +1139,7 @@ export const updateAccount = async (payload: {
   bank?: string | null;
   statementDay?: number | null;
   paymentDueDay?: number | null;
+  last4?: string | null;
 }) => {
   const supabase = getSupabaseAdmin();
 
@@ -1137,6 +1155,10 @@ export const updateAccount = async (payload: {
 
   if (payload.bank !== undefined) {
     updates.bank = payload.bank?.trim() ? payload.bank.trim() : null;
+  }
+
+  if (payload.last4 !== undefined) {
+    updates.last4 = normalizeLast4(payload.last4);
   }
 
   if (existing.kind === "credit") {

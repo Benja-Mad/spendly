@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { getSupabaseRouteHandler, getSupabaseAdmin } from "@/lib/supabase";
+import { readJsonBody } from "@/lib/http";
 
 export async function POST(request: Request) {
   const supabase = await getSupabaseRouteHandler();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const { inviteCode } = body;
 
   if (!inviteCode || typeof inviteCode !== "string") {

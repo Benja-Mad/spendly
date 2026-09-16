@@ -35,6 +35,8 @@ export interface Account {
   creditDebt: number;
   statementDay: number | null;
   paymentDueDay: number | null;
+  /** Últimos 4 dígitos, opcional. Texto: "0042" no es 42. */
+  last4: string | null;
 }
 
 export interface Category {

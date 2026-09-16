@@ -1,38 +1,58 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState, useEffect } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
-import Link from "next/link";
+import { translateAuthError } from "@/lib/errors";
+import { notify } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
 
 export function ResetPasswordForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     const supabase = getSupabaseBrowser();
-    supabase.auth.onAuthStateChange((event: string) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setChecking(false);
-      }
+    let done = false;
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      setChecking(false);
+    };
+
+    // Si el enlace ya dejo sesion activa se resuelve de inmediato; si no,
+    // se espera el evento PASSWORD_RECOVERY con un timeout como red de
+    // seguridad, en vez de bloquear siempre 3 segundos.
+    supabase.auth.getSession().then((result: { data: { session: unknown | null } }) => {
+      if (result.data.session) finish();
     });
-    setTimeout(() => setChecking(false), 3000);
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event: string) => {
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") finish();
+    });
+
+    const timeout = setTimeout(finish, 3000);
+
+    return () => {
+      clearTimeout(timeout);
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
 
     if (password !== confirmPassword) {
-      setError("Las contraseñas no coinciden");
+      notify.error(new Error("Las contraseñas no coinciden"));
       return;
     }
 
     if (password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres");
+      notify.error(new Error("La contraseña debe tener al menos 6 caracteres"));
       return;
     }
 
@@ -43,12 +63,12 @@ export function ResetPasswordForm() {
       const { error: updateError } = await supabase.auth.updateUser({ password });
 
       if (updateError) {
-        throw new Error(updateError.message);
+        throw new Error(translateAuthError(updateError.message, "No se pudo actualizar la contraseña."));
       }
 
       setSuccess(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al actualizar contraseña");
+      notify.error(err, "No se pudo actualizar la contraseña.");
     } finally {
       setLoading(false);
     }
@@ -57,7 +77,7 @@ export function ResetPasswordForm() {
   if (checking) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+        <div role="status" aria-label="Verificando enlace" className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
       </div>
     );
   }
@@ -111,11 +131,6 @@ export function ResetPasswordForm() {
         >
           <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">Restablecer contraseña</h2>
 
-          {error && (
-            <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-400">
-              {error}
-            </div>
-          )}
 
           <div className="space-y-4">
             <div>
@@ -125,6 +140,7 @@ export function ResetPasswordForm() {
               <input
                 id="password"
                 type="password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -140,6 +156,7 @@ export function ResetPasswordForm() {
               <input
                 id="confirmPassword"
                 type="password"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -148,13 +165,9 @@ export function ResetPasswordForm() {
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="cursor-pointer w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-2.5 text-sm font-medium text-white shadow-lg transition-all hover:shadow-xl disabled:opacity-50"
-            >
+            <Button type="submit" variant="primary" block disabled={loading}>
               {loading ? "Actualizando..." : "Actualizar contraseña"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

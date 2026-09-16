@@ -52,6 +52,10 @@ if (!email || !password) {
   process.exit(1);
 }
 
+// Tras el guard ya no son undefined, pero process.exit() no lo estrecha para TS.
+const userEmail: string = email;
+const userPassword: string = password;
+
 async function main() {
   // 1. Verificar si el usuario ya existe
   const { data: existingUsers, error: listError } = await adminClient.auth.admin.listUsers();
@@ -61,16 +65,16 @@ async function main() {
     process.exit(1);
   }
 
-  const existingUser = existingUsers.users.find((u) => u.email === email);
+  const existingUser = existingUsers.users.find((u) => u.email === userEmail);
   let userId: string;
 
   if (existingUser) {
-    console.log(`El usuario ${email} ya existe con ID: ${existingUser.id}`);
+    console.log(`El usuario ${userEmail} ya existe con ID: ${existingUser.id}`);
     userId = existingUser.id;
   } else {
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
-      email,
-      password,
+      email: userEmail,
+      password: userPassword,
       email_confirm: true,
     });
 
@@ -80,7 +84,7 @@ async function main() {
     }
 
     userId = newUser.user.id;
-    console.log(`Usuario creado: ${email} (ID: ${userId})`);
+    console.log(`Usuario creado: ${userEmail} (ID: ${userId})`);
   }
 
   // 2. Verificar/crear perfil
@@ -93,8 +97,8 @@ async function main() {
   if (!existingProfile) {
     const { error: profileError } = await adminClient.from("profiles").insert({
       id: userId,
-      email,
-      full_name: email.split("@")[0],
+      email: userEmail,
+      full_name: userEmail.split("@")[0],
     });
 
     if (profileError) {

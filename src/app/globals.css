@@ -1,21 +1,23 @@
 @import "tailwindcss";
 
+/* El tema se controla con data-theme en <html> para poder ofrecer un toggle.
+   Sin esto, dark: quedaba atado a prefers-color-scheme y no era cambiable. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
   --background: #fafafa;
   --foreground: #18181b;
 }
 
+[data-theme="dark"] {
+  --background: #09090b;
+  --foreground: #f4f4f5;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Inter", Arial, Helvetica, sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #09090b;
-    --foreground: #f4f4f5;
-  }
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, Arial, Helvetica, sans-serif;
 }
 
 * {
@@ -24,7 +26,7 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
@@ -32,7 +34,94 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Antes no habia ningun estilo de foco propio: los botones con gradiente
+   dejaban el outline del navegador casi invisible sobre el verde. */
+:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 ::selection {
   background: #10b981;
   color: white;
+}
+
+@keyframes refreshbar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+/* Apertura/cierre del menú de Select: crece desde el borde del trigger. */
+@keyframes selectIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes selectOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+
+/* Menú del usuario: crece desde el borde por el que se abre (Radix expone el
+   origen en --radix-dropdown-menu-content-transform-origin). */
+@keyframes menuIn {
+  from { opacity: 0; transform: translateY(var(--menu-shift, 4px)) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes menuOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(var(--menu-shift, 4px)) scale(0.97); }
+}
+
+/* Tarjetas y cuentas: al pasar el cursor se inclinan hacia él, como una tarjeta
+   física que tomas en la mano. El ángulo lo escribe useTilt sobre el style; esta
+   clase solo define cómo se llega y cómo se vuelve.
+
+   Al seguir al cursor la duración baja a 120ms (la pone el hook) para que la
+   tarjeta se sienta pegada al puntero; al salir vuelve a 240ms, que es la vuelta
+   al centro. */
+.card-tilt {
+  transition:
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* El hook ya no inclina nada cuando se pide reducir movimiento; esto lo asegura
+   aunque quede un transform escrito de antes de cambiar la preferencia. */
+@media (prefers-reduced-motion: reduce) {
+  .card-tilt {
+    transform: none !important;
+  }
+}
+
+/* El scroll no debe saltar al cambiar de ruta. */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+
+/* Reserva el canal de la barra de scroll aunque no haya scroll.
+   Sin esto, al pasar de esqueleto (con scroll) a contenido (sin scroll) la
+   barra desaparecía y todo el contenido del modal se corría ~12 px de lado:
+   ese era el tirón que quedaba al final de la última fila del esqueleto. */
+.scroll-stable {
+  scrollbar-gutter: stable;
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseRouteHandler } from "@/lib/supabase";
+import { readJsonBody } from "@/lib/http";
 
 export async function POST(
   request: Request,
@@ -9,7 +10,7 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
   const { id } = await params;
@@ -22,14 +23,14 @@ export async function POST(
     .single();
 
   if (!membership) {
-    return NextResponse.json({ error: "Not a member" }, { status: 403 });
+    return NextResponse.json({ error: "No eres miembro de esta junta." }, { status: 403 });
   }
 
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const { name } = body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    return NextResponse.json({ error: "El nombre es obligatorio." }, { status: 400 });
   }
 
   const { data, error } = await supabase
@@ -56,7 +57,7 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
   const { id } = await params;
@@ -75,7 +76,7 @@ export async function DELETE(
     .single();
 
   if (!membership) {
-    return NextResponse.json({ error: "Not a member" }, { status: 403 });
+    return NextResponse.json({ error: "No eres miembro de esta junta." }, { status: 403 });
   }
 
   const { error } = await supabase

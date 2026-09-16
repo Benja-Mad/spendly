@@ -1,9 +1,5 @@
-export const formatClp = (value: number) =>
-  new Intl.NumberFormat("es-CL", {
-    style: "currency",
-    currency: "CLP",
-    maximumFractionDigits: 0,
-  }).format(value);
+// El formateo vive en lib/format.ts; se re-exporta para no romper imports.
+export { formatClp, formatDate } from "@/lib/format";
 
 export const parsePositiveInteger = (value: unknown, field: string) => {
   const numeric = Number(value);

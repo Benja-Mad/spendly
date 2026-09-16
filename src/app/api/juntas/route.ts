@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { getSupabaseRouteHandler } from "@/lib/supabase";
+import { readJsonBody } from "@/lib/http";
+import { mapJunta } from "@/lib/juntas";
+import { RowRecord } from "@/lib/types";
 
 export async function GET() {
   const supabase = await getSupabaseRouteHandler();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
   const { data: memberships, error } = await supabase
@@ -34,7 +37,7 @@ export async function GET() {
     return NextResponse.json({ error: juntasError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ juntas });
+  return NextResponse.json({ juntas: (juntas ?? []).map((j) => mapJunta(j as RowRecord)) });
 }
 
 export async function POST(request: Request) {
@@ -42,19 +45,19 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const { name, description } = body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    return NextResponse.json({ error: "El nombre es obligatorio." }, { status: 400 });
   }
 
   const { data: junta, error: juntaError } = await supabase
     .from("juntas")
-    .insert({ name: name.trim(), description: description?.trim() || null, owner_id: user.id })
+    .insert({ name: String(name).trim(), description: description ? String(description).trim() : null, owner_id: user.id })
     .select()
     .single();
 

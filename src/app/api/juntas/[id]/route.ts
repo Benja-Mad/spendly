@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin, getSupabaseRouteHandler } from "@/lib/supabase";
+import { readJsonBody } from "@/lib/http";
+import { mapJunta } from "@/lib/juntas";
+import { RowRecord } from "@/lib/types";
 
 export async function GET(
   _request: Request,
@@ -9,7 +12,7 @@ export async function GET(
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
   const { id } = await params;
@@ -22,7 +25,7 @@ export async function GET(
     .single();
 
   if (!membership) {
-    return NextResponse.json({ error: "Not a member" }, { status: 403 });
+    return NextResponse.json({ error: "No eres miembro de esta junta." }, { status: 403 });
   }
 
   const admin = getSupabaseAdmin();
@@ -96,9 +99,17 @@ export async function GET(
     toUser: profileMap.get(s.to_user_id) || null,
   }));
 
+  // El costo se atribuye al responsable asignado; si no hay (o si el asignado
+  // ya no es miembro de la junta), al creador. Sin este fallback los productos
+  // asignados a un ex-miembro desaparecian del balance y "Total del pozo" no
+  // cuadraba con el total mostrado en la pestana de productos.
+  const memberIds = new Set((membersRes.data || []).map((m) => m.user_id));
+  const payerOf = (p: { assigned_to?: string | null; user_id: string }) =>
+    p.assigned_to && memberIds.has(p.assigned_to) ? p.assigned_to : p.user_id;
+
   const balances = (membersRes.data || []).map((m) => {
     const memberProducts = (productsRes.data || []).filter(
-      (p) => (p.assigned_to || p.user_id) === m.user_id
+      (p) => payerOf(p) === m.user_id,
     );
     const totalSpent = memberProducts.reduce((sum, p) => sum + p.amount * p.quantity, 0);
     return {
@@ -118,15 +129,7 @@ export async function GET(
   }));
 
   return NextResponse.json({
-    junta: {
-      id: juntaRes.data.id,
-      name: juntaRes.data.name,
-      description: juntaRes.data.description,
-      inviteCode: juntaRes.data.invite_code,
-      ownerId: juntaRes.data.owner_id,
-      isClosed: juntaRes.data.is_closed,
-      createdAt: juntaRes.data.created_at,
-    },
+    junta: mapJunta(juntaRes.data as RowRecord),
     members,
     categories: (categoriesRes.data || []).map((c) => ({
       id: c.id,
@@ -147,7 +150,7 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
   const { id } = await params;
@@ -159,10 +162,10 @@ export async function PATCH(
     .single();
 
   if (!junta || junta.owner_id !== user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para hacer esto." }, { status: 403 });
   }
 
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const updates: Record<string, unknown> = {};
 
   if (body.name !== undefined) updates.name = body.name;
@@ -180,7 +183,7 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ junta: data });
+  return NextResponse.json({ junta: mapJunta(data as RowRecord) });
 }
 
 export async function DELETE(
@@ -191,7 +194,7 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
   const { id } = await params;
@@ -203,7 +206,7 @@ export async function DELETE(
     .single();
 
   if (!junta || junta.owner_id !== user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para hacer esto." }, { status: 403 });
   }
 
   const { error } = await supabase.from("juntas").delete().eq("id", id);

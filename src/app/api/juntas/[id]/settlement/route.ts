@@ -9,7 +9,7 @@ export async function GET(
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Debes iniciar sesión." }, { status: 401 });
   }
 
   const { id } = await params;
@@ -22,7 +22,7 @@ export async function GET(
     .single();
 
   if (!membership) {
-    return NextResponse.json({ error: "Not a member" }, { status: 403 });
+    return NextResponse.json({ error: "No eres miembro de esta junta." }, { status: 403 });
   }
 
   const { data: members } = await supabase
@@ -36,7 +36,7 @@ export async function GET(
     .eq("junta_id", id);
 
   if (!members || !products) {
-    return NextResponse.json({ error: "Failed to load data" }, { status: 500 });
+    return NextResponse.json({ error: "No se pudieron cargar los datos." }, { status: 500 });
   }
 
   const userTotals = new Map<string, number>();
@@ -45,10 +45,14 @@ export async function GET(
     userTotals.set(m.user_id, 0);
   }
 
+  const memberIds = new Set(members.map((m) => m.user_id));
+
   for (const p of products) {
-    const responsibleId = p.assigned_to || p.user_id;
-    const current = userTotals.get(responsibleId) || 0;
-    userTotals.set(responsibleId, current + p.amount * p.quantity);
+    // Misma regla que /api/juntas/[id]: responsable asignado si sigue siendo
+    // miembro, si no el creador. Garantiza que la suma cuadre con el total.
+    const payer = p.assigned_to && memberIds.has(p.assigned_to) ? p.assigned_to : p.user_id;
+    const current = userTotals.get(payer) || 0;
+    userTotals.set(payer, current + p.amount * p.quantity);
   }
 
   const totalPool = Array.from(userTotals.values()).reduce((s, v) => s + v, 0);

@@ -1,28 +1,29 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
-import Link from "next/link";
+import { translateAuthError } from "@/lib/errors";
+import { notify } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
 
 export function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
 
     if (password !== confirmPassword) {
-      setError("Las contraseñas no coinciden");
+      notify.error(new Error("Las contraseñas no coinciden"));
       return;
     }
 
     if (password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres");
+      notify.error(new Error("La contraseña debe tener al menos 6 caracteres"));
       return;
     }
 
@@ -33,15 +34,20 @@ export function SignupForm() {
       const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          // Evita que Supabase use el Site URL de desarrollo
+          // (http://localhost:3000) en los correos de confirmación.
+          emailRedirectTo: `${window.location.origin}/login?confirmed=1`,
+        },
       });
 
       if (signUpError) {
-        throw new Error(signUpError.message);
+        throw new Error(translateAuthError(signUpError.message, "No se pudo crear la cuenta."));
       }
 
       setSuccess(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al crear la cuenta");
+      notify.error(err, "No se pudo crear la cuenta.");
     } finally {
       setLoading(false);
     }
@@ -98,11 +104,6 @@ export function SignupForm() {
         >
           <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">Registrarse</h2>
 
-          {error && (
-            <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-400">
-              {error}
-            </div>
-          )}
 
           <div className="space-y-4">
             <div>
@@ -112,6 +113,7 @@ export function SignupForm() {
               <input
                 id="email"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -127,6 +129,7 @@ export function SignupForm() {
               <input
                 id="password"
                 type="password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -142,6 +145,7 @@ export function SignupForm() {
               <input
                 id="confirmPassword"
                 type="password"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -150,13 +154,9 @@ export function SignupForm() {
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="cursor-pointer w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-2.5 text-sm font-medium text-white shadow-lg transition-all hover:shadow-xl disabled:opacity-50"
-            >
+            <Button type="submit" variant="primary" block disabled={loading}>
               {loading ? "Creando cuenta..." : "Crear cuenta"}
-            </button>
+            </Button>
           </div>
         </form>
 
